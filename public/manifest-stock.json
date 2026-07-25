@@ -8,28 +8,37 @@
   "categories": ["business", "shopping"],
   "icons": [
     {
-      "src": "/images/logo.png",
+      "src": "/images/icon-192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "/images/logo.png",
+      "src": "/images/icon-192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "maskable"
     },
     {
-      "src": "/images/logo.png",
+      "src": "/images/icon-512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any"
     },
     {
-      "src": "/images/logo.png",
+      "src": "/images/icon-512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/images/303-3.PNG",
+      "sizes": "800x1200",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Stock Panel Dashboard"
     }
   ],
   "start_url": "/stock.html",

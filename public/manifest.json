@@ -1,20 +1,44 @@
 {
-  "id": "/",
-  "short_name": "Joulane",
-  "name": "JOULANE Fashion",
-  "description": "JOULANE Fashion wholesale women's shoes store",
+  "id": "https://joulane-fashiondz.vercel.app/",
+  "short_name": "Joulane Fashion",
+  "name": "متجر الجولان فاشن للألبسة والحلابات العصريّة",
+  "description": "المتجر الجزائري الأول المتخصص في أفضل وأرقى الموديلات للألبسة النسائية والحلابات بأفضل الأسعار.",
+  "lang": "ar-DZ",
+  "dir": "rtl",
+  "categories": ["shopping", "fashion", "business"],
   "icons": [
     {
-      "src": "/images/logo.png",
+      "src": "/images/icon-192.png",
       "type": "image/png",
       "sizes": "192x192",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/images/logo.png",
+      "src": "/images/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/images/icon-512.png",
       "type": "image/png",
       "sizes": "512x512",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/images/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/images/303-3.PNG",
+      "sizes": "800x1200",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Joulane Store Home"
     }
   ],
   "start_url": "/",
@@ -22,21 +46,5 @@
   "background_color": "#0d0d0d",
   "theme_color": "#c99332",
   "display": "standalone",
-  "orientation": "portrait",
-  "shortcuts": [
-    {
-      "name": "Stock Joulane",
-      "short_name": "Stock",
-      "description": "Open the stock management panel",
-      "url": "/#stock",
-      "icons": [
-        {
-          "src": "/images/logo.png",
-          "type": "image/png",
-          "sizes": "192x192",
-          "purpose": "any maskable"
-        }
-      ]
-    }
-  ]
+  "orientation": "portrait"
 }
