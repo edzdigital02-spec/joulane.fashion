@@ -1,5 +1,5 @@
 {
-  "id": "/#admin",
+  "id": "/admin.html",
   "short_name": "Joulane Admin",
   "name": "Joulane Fashion Admin Panel",
   "description": "Admin Panel for JOULANE Fashion",
@@ -17,8 +17,8 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "/#admin",
-  "scope": "/",
+  "start_url": "/admin.html",
+  "scope": "/admin.html",
   "background_color": "#0d0d0d",
   "theme_color": "#c99332",
   "display": "standalone",

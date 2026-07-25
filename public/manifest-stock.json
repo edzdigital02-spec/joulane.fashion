@@ -1,5 +1,5 @@
 {
-  "id": "/#stock",
+  "id": "/stock.html",
   "short_name": "Stock Joulane",
   "name": "Joulane Fashion Stock Panel",
   "description": "Stock Panel for JOULANE Fashion",
@@ -17,8 +17,8 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "/#stock",
-  "scope": "/",
+  "start_url": "/stock.html",
+  "scope": "/stock.html",
   "background_color": "#0d0d0d",
   "theme_color": "#c99332",
   "display": "standalone",
