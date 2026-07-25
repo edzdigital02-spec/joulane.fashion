@@ -1210,59 +1210,201 @@
 
       <!-- Stock Main Content Screen -->
       <div id="stock-content-sec" class="stock-content-sec hidden">
-        <!-- Stock KPI Stat Cards -->
-        <div class="stock-kpi-grid">
-          <div class="stock-kpi-card">
-            <div class="kpi-icon gold"><i class="fa-solid fa-cubes"></i></div>
-            <div class="kpi-data">
-              <span id="stock-kpi-models" class="kpi-val">0</span>
-              <span class="kpi-lbl">إجمالي الموديلات بالمتجر</span>
+        <!-- Stock Nav Tabs -->
+        <div class="stock-nav-tabs">
+          <button type="button" id="stock-tab-btn-items" class="stock-tab-btn active">
+            <i class="fa-solid fa-boxes-stacked"></i> قائمة وإدارة الموديلات
+          </button>
+          <button type="button" id="stock-tab-btn-logs" class="stock-tab-btn">
+            <i class="fa-solid fa-clock-rotate-left"></i> سجل الشحنات وتاريخ الإدخال
+            <span id="stock-logs-badge-count" class="badge-count">0</span>
+          </button>
+        </div>
+
+        <!-- Tab 1: Products Grid View -->
+        <div id="stock-tab-items-sec">
+          <!-- Stock KPI Stat Cards -->
+          <div class="stock-kpi-grid mb-3">
+            <div class="stock-kpi-card">
+              <div class="kpi-icon gold"><i class="fa-solid fa-cubes"></i></div>
+              <div class="kpi-data">
+                <span id="stock-kpi-models" class="kpi-val">0</span>
+                <span class="kpi-lbl">إجمالي الموديلات بالمتجر</span>
+              </div>
+            </div>
+            <div class="stock-kpi-card">
+              <div class="kpi-icon blue"><i class="fa-solid fa-boxes-packing"></i></div>
+              <div class="kpi-data">
+                <span id="stock-kpi-cartons" class="kpi-val">0</span>
+                <span class="kpi-lbl">إجمالي الكراطين بالمخزن</span>
+              </div>
+            </div>
+            <div class="stock-kpi-card">
+              <div class="kpi-icon warning"><i class="fa-solid fa-triangle-exclamation"></i></div>
+              <div class="kpi-data">
+                <span id="stock-kpi-low" class="kpi-val">0</span>
+                <span class="kpi-lbl">موديلات وشكت على النفاد</span>
+              </div>
+            </div>
+            <div class="stock-kpi-card">
+              <div class="kpi-icon danger"><i class="fa-solid fa-ban"></i></div>
+              <div class="kpi-data">
+                <span id="stock-kpi-out" class="kpi-val">0</span>
+                <span class="kpi-lbl">موديلات نافدة كلياً</span>
+              </div>
             </div>
           </div>
-          <div class="stock-kpi-card">
-            <div class="kpi-icon blue"><i class="fa-solid fa-boxes-packing"></i></div>
-            <div class="kpi-data">
-              <span id="stock-kpi-cartons" class="kpi-val">0</span>
-              <span class="kpi-lbl">إجمالي الكراطين بالمخزن</span>
+
+          <!-- Stock Toolbar Filter & Search -->
+          <div class="stock-toolbar-card">
+            <div class="stock-search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="stock-search-input" class="form-control" placeholder="ابحث بكود الموديل (مثال: 303-3) أو اسم المنتج..." />
+            </div>
+            <div class="stock-filter-box">
+              <select id="stock-cat-filter" class="form-control select-dark">
+                <option value="all">كل الأقسام</option>
+              </select>
+              <select id="stock-status-filter" class="form-control select-dark">
+                <option value="all">كل حالات المخزون</option>
+                <option value="in_stock">🟢 متوفر فقط</option>
+                <option value="low_stock">🟡 مخزون منخفض فقط</option>
+                <option value="out_of_stock">🔴 نفذ المخزون فقط</option>
+              </select>
             </div>
           </div>
-          <div class="stock-kpi-card">
-            <div class="kpi-icon warning"><i class="fa-solid fa-triangle-exclamation"></i></div>
-            <div class="kpi-data">
-              <span id="stock-kpi-low" class="kpi-val">0</span>
-              <span class="kpi-lbl">موديلات وشكت على النفاد</span>
+
+          <!-- Stock Products Grid -->
+          <div id="stock-items-grid" class="stock-items-grid mt-3"></div>
+        </div>
+
+        <!-- Tab 2: Stock Logs & History View -->
+        <div id="stock-tab-logs-sec" class="hidden">
+          <div class="stock-toolbar-card mb-3">
+            <div class="stock-search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="stock-logs-search" class="form-control" placeholder="ابحث في سجلات الإدخال، اسم الموديل، أو العامل المسؤول..." />
+            </div>
+            <button type="button" id="stock-clear-logs-btn" class="btn btn-outline-danger btn-sm">
+              <i class="fa-solid fa-trash-can"></i> مسح سجل الإدخال
+            </button>
+          </div>
+          <div id="stock-logs-list" class="stock-logs-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stock Entry Submodal -->
+    <div id="stock-entry-submodal" class="stock-submodal-overlay">
+      <div class="stock-submodal-box">
+        <div class="stock-submodal-header">
+          <h4 id="stock-entry-modal-title"><i class="fa-solid fa-box-archive text-gold"></i> إدخال شحنة جديد للمخزن</h4>
+          <button type="button" id="close-stock-entry-submodal" class="btn-close-modal"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="stock-entry-modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 12px;">
+            <img id="stock-entry-prod-img" src="/images/303-3.PNG" style="width: 55px; height: 55px; object-fit: cover; border-radius: 8px;" />
+            <div>
+              <span id="stock-entry-prod-code" class="stock-model-tag">كود: 303-3</span>
+              <h5 id="stock-entry-prod-title" style="margin: 4px 0 0 0; font-size: 1rem;">موديل 303-3</h5>
             </div>
           </div>
-          <div class="stock-kpi-card">
-            <div class="kpi-icon danger"><i class="fa-solid fa-ban"></i></div>
-            <div class="kpi-data">
-              <span id="stock-kpi-out" class="kpi-val">0</span>
-              <span class="kpi-lbl">موديلات نافدة كلياً</span>
+
+          <div>
+            <label style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; margin-bottom: 6px; display: block;">نوع العملية:</label>
+            <div class="stock-mode-selector">
+              <button type="button" class="stock-mode-btn active" data-mode="add">🟢 إضافة شحنة (+)</button>
+              <button type="button" class="stock-mode-btn" data-mode="remove">🔴 سحب (-)</button>
+              <button type="button" class="stock-mode-btn" data-mode="set">🔵 تعديل مباشر (=)</button>
             </div>
+          </div>
+
+          <div>
+            <label style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; margin-bottom: 6px; display: block;">عدد الكراطين:</label>
+            <input type="number" id="stock-entry-qty-input" class="form-control text-center" value="10" min="1" max="9999" style="font-size: 1.2rem; font-weight: 800;" />
+            <div class="stock-pills-row">
+              <button type="button" class="btn-stock-pill" data-pill="1">+1</button>
+              <button type="button" class="btn-stock-pill" data-pill="5">+5</button>
+              <button type="button" class="btn-stock-pill" data-pill="10">+10</button>
+              <button type="button" class="btn-stock-pill" data-pill="20">+20</button>
+              <button type="button" class="btn-stock-pill" data-pill="50">+50</button>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <label style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block;">اسم المسؤول / العامل:</label>
+              <input type="text" id="stock-entry-operator-input" class="form-control" placeholder="مثال: أحمد" />
+            </div>
+            <div>
+              <label style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block;">ملاحظة الشحنة (اختياري):</label>
+              <input type="text" id="stock-entry-note-input" class="form-control" placeholder="مثال: شحنة من المصنع" />
+            </div>
+          </div>
+
+          <div class="stock-calc-preview">
+            <div class="calc-item">
+              <span class="lbl">المخزون الحالي</span>
+              <span id="stock-calc-current" class="val" style="color: #94a3b8;">15</span>
+            </div>
+            <div class="calc-item">
+              <span class="lbl">التغيير</span>
+              <span id="stock-calc-change" class="val" style="color: #22c55e;">+10</span>
+            </div>
+            <div class="calc-item">
+              <span class="lbl">المخزون الجديد النهائي</span>
+              <span id="stock-calc-final" class="val" style="color: var(--gold-primary, #c99332);">25 كرطون</span>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-top: 6px;">
+            <button type="button" id="stock-entry-cancel-btn" class="btn btn-outline-light" style="flex: 1;">إلغاء</button>
+            <button type="button" id="stock-entry-proceed-btn" class="btn btn-gold" style="flex: 2; font-weight: 800;">
+              <i class="fa-solid fa-circle-check"></i> معاينة وتأكيد الإدخال
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stock Confirmation Dialog Submodal -->
+    <div id="stock-confirm-submodal" class="stock-submodal-overlay">
+      <div class="stock-submodal-box" style="max-width: 460px; text-align: center;">
+        <div style="font-size: 3rem; color: #f59e0b; margin-bottom: -10px;">
+          <i class="fa-solid fa-circle-exclamation"></i>
+        </div>
+        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #fff;">تأكيد إدخال الشحنة للمخزن</h3>
+        <p style="color: #94a3b8; font-size: 0.88rem; margin: 0;">الرجاء مراجعة تفاصيل العملية وتأكيد الإدخال لتثبيت الشحنة في السجلات والموقع الحي.</p>
+
+        <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(201,147,50,0.3); border-radius: 14px; padding: 14px; text-align: right; display: flex; flex-direction: column; gap: 8px; font-size: 0.88rem;">
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: #94a3b8;">اسم الموديل:</span>
+            <strong id="confirm-modal-prod-name" style="color: #fff;">موديل 303-3</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: #94a3b8;">نوع العملية والكمية:</span>
+            <strong id="confirm-modal-action-text" style="color: #22c55e;">+10 كراطين (إضافة شحنة)</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: #94a3b8;">الرصيد الجديد بالمخزن:</span>
+            <strong id="confirm-modal-new-qty" style="color: var(--gold-primary, #c99332);">25 كرطون</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: #94a3b8;">تاريخ وساعة الإدخال:</span>
+            <strong id="confirm-modal-date" style="color: #fff;">25 يوليو 2026 - 23:45</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: #94a3b8;">المسؤول:</span>
+            <strong id="confirm-modal-operator" style="color: #fff;">أحمد</strong>
           </div>
         </div>
 
-        <!-- Stock Toolbar Filter & Search -->
-        <div class="stock-toolbar-card">
-          <div class="stock-search-box">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" id="stock-search-input" class="form-control" placeholder="ابحث بكود الموديل (مثال: 303-3 أو 9310) أو اسم المنتج..." />
-          </div>
-          <div class="stock-filter-box">
-            <select id="stock-cat-filter" class="form-control select-dark">
-              <option value="all">كل الأقسام</option>
-            </select>
-            <select id="stock-status-filter" class="form-control select-dark">
-              <option value="all">كل حالات المخزون</option>
-              <option value="in_stock">🟢 متوفر فقط</option>
-              <option value="low_stock">🟡 مخزون منخفض فقط</option>
-              <option value="out_of_stock">🔴 نفذ المخزون فقط</option>
-            </select>
-          </div>
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+          <button type="button" id="confirm-cancel-btn" class="btn btn-outline-light" style="flex: 1;">تراجع / تعديل</button>
+          <button type="button" id="confirm-submit-btn" class="btn btn-gold" style="flex: 1.5; font-weight: 800; background: #22c55e; border-color: #22c55e; color: #000;">
+            <i class="fa-solid fa-check-double"></i> تأكيد الحفظ النهائي
+          </button>
         </div>
-
-        <!-- Stock Products Grid -->
-        <div id="stock-items-grid" class="stock-items-grid"></div>
       </div>
     </div>
   </div>

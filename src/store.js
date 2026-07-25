@@ -21,7 +21,8 @@ const STORAGE_KEYS = {
   SHIPPING: 'joulane_shipping_rates',
   PASSCODE: 'joulane_admin_pass',
   CART: 'joulane_cart',
-  CATEGORIES: 'joulane_categories'
+  CATEGORIES: 'joulane_categories',
+  STOCK_LOGS: 'joulane_stock_logs'
 };
 
 const PRODUCT_CATALOG_VERSION = '2026-07-25-70-models-full-sync-v2';
@@ -314,6 +315,40 @@ export const Store = {
     localStorage.setItem(STORAGE_KEYS.SHIPPING, JSON.stringify(ratesMap));
     SupabaseManager.pushData('shipping', ratesMap);
     window.dispatchEvent(new CustomEvent('joulane:shippingUpdated', { detail: ratesMap }));
+  },
+
+  // Stock Logs History
+  getStockLogs() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.STOCK_LOGS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error('Error reading stock logs:', e);
+    }
+    return [];
+  },
+  saveStockLogs(logs) {
+    localStorage.setItem(STORAGE_KEYS.STOCK_LOGS, JSON.stringify(logs));
+    SupabaseManager.pushData('stock_logs', logs);
+    window.dispatchEvent(new CustomEvent('joulane:stockLogsUpdated', { detail: logs }));
+  },
+  addStockLog(entry) {
+    const logs = this.getStockLogs();
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ar-DZ', { year: 'numeric', month: 'short', day: 'numeric' }) + ' ' + now.toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' });
+    const newLog = {
+      id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      timestamp: now.toISOString(),
+      dateFormatted: dateStr,
+      ...entry
+    };
+    logs.unshift(newLog);
+    this.saveStockLogs(logs);
+    return newLog;
+  },
+  clearStockLogs() {
+    localStorage.removeItem(STORAGE_KEYS.STOCK_LOGS);
+    this.saveStockLogs([]);
   },
 
   // Export / Import / Reset

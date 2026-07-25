@@ -2992,3 +2992,264 @@ svg {
   }
 }
 
+/* ==========================================================================
+   STOCK PANEL ENHANCEMENTS (TABS, LOGS, MODALS & CONFIRMATION DIALOGS)
+   ========================================================================== */
+.stock-nav-tabs {
+  display: flex;
+  gap: 10px;
+  border-bottom: 2px solid var(--line, #2a2a2a);
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.stock-tab-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line, #2a2a2a);
+  color: var(--text-muted, #94a3b8);
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.stock-tab-btn:hover {
+  background: rgba(201, 147, 50, 0.1);
+  color: var(--gold-primary, #c99332);
+}
+
+.stock-tab-btn.active {
+  background: var(--gold-primary, #c99332);
+  color: #000;
+  border-color: var(--gold-primary, #c99332);
+  box-shadow: 0 4px 14px rgba(201, 147, 50, 0.3);
+}
+
+.stock-tab-btn .badge-count {
+  background: rgba(0, 0, 0, 0.2);
+  color: inherit;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+}
+
+.stock-tab-btn.active .badge-count {
+  background: #000;
+  color: #fff;
+}
+
+/* History Logs Container & Cards */
+.stock-logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.stock-log-card {
+  background: var(--surface-soft, #171717);
+  border: 1px solid var(--line, #2a2a2a);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  transition: border-color 0.2s;
+}
+
+.stock-log-card:hover {
+  border-color: rgba(201, 147, 50, 0.4);
+}
+
+.stock-log-card .log-main-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.stock-log-card .log-img {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line, #2a2a2a);
+}
+
+.stock-log-card .log-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.stock-log-card .log-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.stock-log-card .log-meta {
+  font-size: 0.78rem;
+  color: var(--muted, #94a3b8);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.stock-log-card .log-badge-add {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.stock-log-card .log-badge-remove {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.stock-log-card .log-badge-set {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+/* Modals for Update & Confirmation */
+.stock-submodal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  z-index: 10500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.stock-submodal-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.stock-submodal-box {
+  background: #171717;
+  border: 1px solid var(--line, #2a2a2a);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 520px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+  animation: stockModalPop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes stockModalPop {
+  from { transform: scale(0.9) translateY(20px); }
+  to { transform: scale(1) translateY(0); }
+}
+
+.stock-submodal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--line, #2a2a2a);
+  padding-bottom: 12px;
+}
+
+.stock-submodal-header h4 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--gold-primary, #c99332);
+}
+
+.stock-mode-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.stock-mode-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line, #2a2a2a);
+  color: #fff;
+  padding: 10px 4px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.stock-mode-btn.active[data-mode="add"] { background: rgba(34, 197, 94, 0.2); border-color: #22c55e; color: #22c55e; }
+.stock-mode-btn.active[data-mode="remove"] { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #ef4444; }
+.stock-mode-btn.active[data-mode="set"] { background: rgba(59, 130, 246, 0.2); border-color: #3b82f6; color: #3b82f6; }
+
+.stock-pills-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.btn-stock-pill {
+  background: rgba(201, 147, 50, 0.1);
+  border: 1px solid var(--gold-primary, #c99332);
+  color: var(--gold-primary, #c99332);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.btn-stock-pill:hover {
+  background: var(--gold-primary, #c99332);
+  color: #000;
+}
+
+.stock-calc-preview {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px dashed var(--gold-primary, #c99332);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  justify-content: space-around;
+  text-align: center;
+}
+
+.stock-calc-preview .calc-item .lbl {
+  font-size: 0.75rem;
+  color: var(--muted, #94a3b8);
+  display: block;
+}
+
+.stock-calc-preview .calc-item .val {
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
