@@ -42,9 +42,10 @@
     }
   ],
   "start_url": "/admin.html",
-  "scope": "/",
+  "scope": "/admin.html",
   "background_color": "#0d0d0d",
-  "theme_color": "#c99332",
+  "theme_color": "#0d0d0d",
   "display": "standalone",
+  "display_override": ["standalone", "fullscreen"],
   "orientation": "portrait"
 }
