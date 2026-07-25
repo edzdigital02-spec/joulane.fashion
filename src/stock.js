@@ -100,10 +100,6 @@ export function initStockPanel(refreshMainStoreFn) {
       const correctPass = Store.getPasscode();
       if (enteredPass === correctPass || enteredPass === '1234') {
         showStockDashboard();
-        if (window.deferredPrompt) {
-          window.deferredPrompt.prompt();
-          window.deferredPrompt = null;
-        }
       } else {
         alert('كلمة المرور غير صحيحة!');
         passInput.select();

@@ -126,10 +126,6 @@ export function initAdmin(refreshMainStoreFn) {
       const correctPass = Store.getPasscode();
       if (enteredPass === correctPass || enteredPass === '1234') {
         showDashboard();
-        if (window.deferredPrompt) {
-          window.deferredPrompt.prompt();
-          window.deferredPrompt = null;
-        }
       } else {
         alert('كلمة المرور غير صحيحة! الكلمة الافتراضية هي 1234');
         passInput.select();
