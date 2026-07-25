@@ -1,5 +1,5 @@
 {
-  "id": "https://joulane-fashiondz.vercel.app/stock.html",
+  "id": "/stock",
   "short_name": "Stock Joulane",
   "name": "Joulane Fashion Stock Panel",
   "description": "تطبيق إدارة المخزن لمتجر الجولان فاشن للحلابات والملابس",
@@ -42,10 +42,9 @@
     }
   ],
   "start_url": "/stock.html",
-  "scope": "/stock.html",
+  "scope": "/",
   "background_color": "#0d0d0d",
   "theme_color": "#0d0d0d",
   "display": "standalone",
-  "display_override": ["standalone", "fullscreen"],
   "orientation": "portrait"
 }

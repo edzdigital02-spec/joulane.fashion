@@ -14,7 +14,7 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW reg error:', err));
+        navigator.serviceWorker.register('/sw-admin.js', { scope: '/' }).catch(err => console.log('SW reg error:', err));
       });
     }
     if (window.location.hash !== '#admin') {
