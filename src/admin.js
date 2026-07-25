@@ -118,11 +118,34 @@ export function initAdmin(refreshMainStoreFn) {
     }
   }
 
+  function enforceAdminUserPermissions() {
+    let currentUser = null;
+    try {
+      const uJson = sessionStorage.getItem('joulane_current_user');
+      if (uJson) currentUser = JSON.parse(uJson);
+    } catch(e){}
+
+    if (!currentUser || currentUser.id === 'usr_super_admin') return;
+
+    const p = currentUser.permissions || {};
+    
+    const usersTabBtn = document.querySelector('.admin-tab-btn[data-tab="users"]');
+    if (usersTabBtn) {
+      usersTabBtn.style.display = (p.adminUsers === false) ? 'none' : '';
+    }
+
+    const ordersTabBtn = document.querySelector('.admin-tab-btn[data-tab="orders"]');
+    if (ordersTabBtn) {
+      ordersTabBtn.style.display = (p.adminOrders === false) ? 'none' : '';
+    }
+  }
+
   function showDashboard() {
     isAdminLoggedIn = true;
     sessionStorage.setItem('joulane_admin_auth', 'true');
     loginSec.classList.add('hidden');
     contentSec.classList.remove('hidden');
+    enforceAdminUserPermissions();
     populateCategoryDropdowns();
     renderOverviewTab();
     renderProductsTab();

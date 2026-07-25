@@ -354,9 +354,42 @@ export function initStockPanel(refreshMainStoreFn) {
   }
 
   // --- Entry Submodal Logic ---
+  function getCurrentUserPermissions() {
+    try {
+      const uJson = sessionStorage.getItem('joulane_current_stock_user') || sessionStorage.getItem('joulane_current_user');
+      if (uJson) {
+        const u = JSON.parse(uJson);
+        if (u) {
+          if (u.id === 'usr_super_admin') {
+            return { stockAdd: true, stockRemove: true, stockSet: true, stockClearLogs: true };
+          }
+          const p = u.permissions || {};
+          return {
+            stockAdd: p.stockAdd !== false,
+            stockRemove: p.stockRemove === true,
+            stockSet: p.stockSet === true,
+            stockClearLogs: p.stockClearLogs === true
+          };
+        }
+      }
+    } catch(e){}
+    return { stockAdd: true, stockRemove: true, stockSet: true, stockClearLogs: true };
+  }
+
   function openStockEntryModal(product) {
     activeProductForEntry = product;
-    currentEntryMode = 'add';
+    const perms = getCurrentUserPermissions();
+
+    if (perms.stockAdd) {
+      currentEntryMode = 'add';
+    } else if (perms.stockRemove) {
+      currentEntryMode = 'remove';
+    } else if (perms.stockSet) {
+      currentEntryMode = 'set';
+    } else {
+      alert('عذراً! حسابك لا يملك أي صلاحيات لإجراء تعديلات على المخزن.');
+      return;
+    }
 
     if (entryImg) entryImg.src = productImageUrl(product);
     if (entryCode) entryCode.textContent = 'كود: ' + (product.name?.ar || product.name || '').replace('موديل ', '');
@@ -401,8 +434,23 @@ export function initStockPanel(refreshMainStoreFn) {
   });
 
   function updateModeButtons() {
+    const perms = getCurrentUserPermissions();
     modeButtons.forEach(b => {
-      if (b.dataset.mode === currentEntryMode) {
+      const mode = b.dataset.mode;
+      let isAllowed = true;
+      if (mode === 'add' && !perms.stockAdd) isAllowed = false;
+      if (mode === 'remove' && !perms.stockRemove) isAllowed = false;
+      if (mode === 'set' && !perms.stockSet) isAllowed = false;
+
+      if (!isAllowed) {
+        b.style.display = 'none';
+        b.disabled = true;
+      } else {
+        b.style.display = 'flex';
+        b.disabled = false;
+      }
+
+      if (mode === currentEntryMode && isAllowed) {
         b.classList.add('active');
       } else {
         b.classList.remove('active');
@@ -456,6 +504,20 @@ export function initStockPanel(refreshMainStoreFn) {
   if (proceedEntryBtn) {
     proceedEntryBtn.addEventListener('click', () => {
       if (!activeProductForEntry) return;
+
+      const perms = getCurrentUserPermissions();
+      if (currentEntryMode === 'add' && !perms.stockAdd) {
+        alert('عذراً! حسابك لا يملك صلاحية إضافة شحنات للمخزن.');
+        return;
+      }
+      if (currentEntryMode === 'remove' && !perms.stockRemove) {
+        alert('عذراً! حسابك لا يملك صلاحية سحب كراطين من المخزن.');
+        return;
+      }
+      if (currentEntryMode === 'set' && !perms.stockSet) {
+        alert('عذراً! حسابك لا يملك صلاحية التعديل المباشر لرصيد المخزن.');
+        return;
+      }
 
       const operator = entryOperatorInput ? entryOperatorInput.value.trim() : '';
       if (!operator) {
@@ -513,6 +575,20 @@ export function initStockPanel(refreshMainStoreFn) {
   if (confirmSubmitBtn) {
     confirmSubmitBtn.addEventListener('click', () => {
       if (!activeProductForEntry) return;
+
+      const perms = getCurrentUserPermissions();
+      if (currentEntryMode === 'add' && !perms.stockAdd) {
+        alert('عذراً! حسابك لا يملك صلاحية إضافة شحنات للمخزن.');
+        return;
+      }
+      if (currentEntryMode === 'remove' && !perms.stockRemove) {
+        alert('عذراً! حسابك لا يملك صلاحية سحب كراطين من المخزن.');
+        return;
+      }
+      if (currentEntryMode === 'set' && !perms.stockSet) {
+        alert('عذراً! حسابك لا يملك صلاحية التعديل المباشر لرصيد المخزن.');
+        return;
+      }
 
       const currentQty = typeof activeProductForEntry.seriesQty === 'number' ? activeProductForEntry.seriesQty : 15;
       const amount = parseInt(entryQtyInput ? entryQtyInput.value : 0, 10) || 0;
