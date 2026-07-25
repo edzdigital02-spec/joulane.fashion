@@ -80,10 +80,7 @@ export function initAdmin(refreshMainStoreFn) {
             window.deferredPrompt = null;
         });
       } else {
-        const confirmed = confirm('لتحميل ملف التطبيق (APK) مباشرة اضغط موافق');
-        if (confirmed) {
-            window.location.href = '/Stock_Joulane.apk';
-        }
+        alert('لم يتم العثور على مثبت تلقائي. لتثبيت تطبيق الإدارة، يرجى الضغط على خيارات المتصفح (الثلاث نقاط) واختيار "تثبيت التطبيق" (Install App أو Add to Home Screen).');
       }
     });
   }
