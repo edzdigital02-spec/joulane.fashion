@@ -12,6 +12,11 @@
   <meta name="apple-mobile-web-app-title" content="Joulane Fashion" />
   <link rel="manifest" href="/manifest-stock.json" />
   <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW reg error:', err));
+      });
+    }
     if (window.location.hash !== '#stock') {
       window.location.hash = '#stock';
     }
