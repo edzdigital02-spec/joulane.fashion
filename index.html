@@ -362,6 +362,7 @@
             <button class="admin-tab-btn" data-tab="cms"><i class="fa-solid fa-pen-to-square"></i> الواجهة الرئيسية (CMS)</button>
             <button class="admin-tab-btn" data-tab="orders"><i class="fa-solid fa-cart-flatbed"></i> الطلبات (<span id="admin-orders-tab-count">0</span>)</button>
             <button class="admin-tab-btn" data-tab="shipping"><i class="fa-solid fa-truck-fast"></i> التوصيل والولايات</button>
+            <button class="admin-tab-btn" data-tab="users"><i class="fa-solid fa-users-gear"></i> طاقم العمل والصلاحيات</button>
             <button class="admin-tab-btn" data-tab="settings"><i class="fa-solid fa-gear"></i> الإعدادات والأمان</button>
           </div>
 
@@ -1030,6 +1031,93 @@
                       </div>
                     </form>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 7: USERS & PERMISSIONS MANAGEMENT -->
+            <div class="admin-tab-pane" id="tab-users">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+                <div>
+                  <h4 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: var(--gold-primary, #c99332);">
+                    <i class="fa-solid fa-users-gear"></i> إدارة طاقم العمل والمسؤولين والصلاحيات
+                  </h4>
+                  <p class="text-muted" style="font-size: 0.85rem; margin: 4px 0 0 0;">أنشئ حسابات مخصصة لكل عامل أو مسؤول مع تحديد الصلاحيات ورمز الدخول الخاص به.</p>
+                </div>
+                <button type="button" id="btn-show-add-user-form" class="btn btn-gold btn-sm" style="font-weight: 800;">
+                  <i class="fa-solid fa-user-plus"></i> إضافة مسؤول / عامل جديد
+                </button>
+              </div>
+
+              <!-- Create / Edit User Form Card -->
+              <div id="admin-user-form-card" class="cms-card mb-4 hidden">
+                <div class="cms-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span id="user-form-title"><i class="fa-solid fa-user-gear"></i> إضافة حساب مسؤول جديد</span>
+                  <button type="button" id="btn-cancel-user-form" class="btn btn-outline-light btn-sm">إلغاء</button>
+                </div>
+                <div class="cms-card-body">
+                  <form id="admin-user-form">
+                    <input type="hidden" id="user-form-id" value="" />
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 16px;">
+                      <div>
+                        <label style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block;">اسم المسؤول / العامل:</label>
+                        <input type="text" id="user-name-input" class="form-control" placeholder="مثال: أحمد العباسي" required />
+                      </div>
+                      <div>
+                        <label style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block;">الصفة / المسمى الوظيفي:</label>
+                        <input type="text" id="user-role-input" class="form-control" placeholder="مثال: مسؤول مخزن الكراطين" required />
+                      </div>
+                      <div>
+                        <label style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block;">رمز الدخول الخاص (Passcode/PIN):</label>
+                        <input type="text" id="user-passcode-input" class="form-control text-center" placeholder="مثال: 4321" required style="letter-spacing: 2px; font-weight: 800;" />
+                      </div>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--line, #2a2a2a); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                      <h5 style="margin: 0 0 12px 0; font-size: 0.95rem; color: var(--gold-primary, #c99332);">تحديد صلاحيات الوصول والعمليات:</h5>
+                      
+                      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;">
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-allow-stock" checked />
+                          <span>🟢 السماح بالدخول لـ <strong>لوحة المخزن (#stock)</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-allow-admin" />
+                          <span>👑 السماح بالدخول لـ <strong>لوحة التحكم (#admin)</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-stock-add" checked />
+                          <span>➕ السماح بـ <strong>إضافة شحنات للمخزن</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-stock-remove" checked />
+                          <span>➖ السماح بـ <strong>سحب كراطين من المخزن</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-stock-set" />
+                          <span>🔵 السماح بـ <strong>التعديل المباشر لرصيد المخزن</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-admin-orders" />
+                          <span>📦 السماح بـ <strong>إدارة الطلبات المباشرة</strong></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                      <button type="submit" class="btn btn-gold" style="font-weight: 800;">
+                        <i class="fa-solid fa-floppy-disk"></i> حفظ الحساب والصلاحيات
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+
+              <!-- Users Table List -->
+              <div id="admin-users-list-container" class="cms-card">
+                <div class="cms-card-header"><i class="fa-solid fa-users"></i> قائمة حسابات طاقم العمل المسجلين</div>
+                <div class="cms-card-body">
+                  <div id="admin-users-list"></div>
                 </div>
               </div>
             </div>

@@ -117,6 +117,7 @@ export function initAdmin(refreshMainStoreFn) {
     renderShippingTab();
     setupPriceToggleButtons(refreshMainStoreFn);
     setupSupabaseConfigForm(refreshMainStoreFn);
+    setupUsersTab();
   }
 
   // Handle Login Submit
@@ -124,11 +125,17 @@ export function initAdmin(refreshMainStoreFn) {
     loginForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const enteredPass = passInput.value.trim();
-      const correctPass = Store.getPasscode();
-      if (enteredPass === correctPass || enteredPass === '1234') {
-        showDashboard();
+      const user = Store.authenticateUser(enteredPass);
+      if (user) {
+        if (user.allowAdmin) {
+          sessionStorage.setItem('joulane_current_user', JSON.stringify(user));
+          showDashboard();
+        } else {
+          alert(`عذراً يا ${user.name}! هذا الحساب مخصص لـ (لوحة المخزن #stock) فقط ولا يملك صلاحية الدخول للوحة التحكم الرئيسية.`);
+          passInput.select();
+        }
       } else {
-        alert('كلمة المرور غير صحيحة! الكلمة الافتراضية هي 1234');
+        alert('رمز الدخول غير صحيح!');
         passInput.select();
       }
     });
@@ -153,6 +160,7 @@ export function initAdmin(refreshMainStoreFn) {
       if (tabTarget === 'cms') populateCmsForm();
       if (tabTarget === 'orders') renderOrdersTab();
       if (tabTarget === 'shipping') renderShippingTab();
+      if (tabTarget === 'users') renderUsersTab();
     });
   });
 
@@ -1150,5 +1158,177 @@ function setupSupabaseConfigForm(refreshMainStoreFn) {
       }
       window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: 'تم تعطيل ربط Supabase.' }));
     }
+  });
+}
+
+// --- Users & Permissions Management ---
+function setupUsersTab() {
+  const showBtn = document.getElementById('btn-show-add-user-form');
+  const cancelBtn = document.getElementById('btn-cancel-user-form');
+  const formCard = document.getElementById('admin-user-form-card');
+  const form = document.getElementById('admin-user-form');
+
+  if (showBtn && formCard) {
+    showBtn.onclick = () => {
+      resetUserForm();
+      formCard.classList.remove('hidden');
+    };
+  }
+
+  if (cancelBtn && formCard) {
+    cancelBtn.onclick = () => {
+      formCard.classList.add('hidden');
+    };
+  }
+
+  if (form) {
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const id = document.getElementById('user-form-id').value;
+      const name = document.getElementById('user-name-input').value.trim();
+      const role = document.getElementById('user-role-input').value.trim();
+      const passcode = document.getElementById('user-passcode-input').value.trim();
+
+      const allowStock = document.getElementById('user-perm-allow-stock').checked;
+      const allowAdmin = document.getElementById('user-perm-allow-admin').checked;
+
+      const permissions = {
+        stockAdd: document.getElementById('user-perm-stock-add').checked,
+        stockRemove: document.getElementById('user-perm-stock-remove').checked,
+        stockSet: document.getElementById('user-perm-stock-set').checked,
+        adminOrders: document.getElementById('user-perm-admin-orders').checked
+      };
+
+      if (id) {
+        Store.updateUser(id, { name, role, passcode, allowStock, allowAdmin, permissions });
+        window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: `تم تعديل حساب: ${name}` }));
+      } else {
+        Store.addUser({ name, role, passcode, allowStock, allowAdmin, permissions });
+        window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: `تم إنشاء حساب جديد: ${name}` }));
+      }
+
+      formCard.classList.add('hidden');
+      renderUsersTab();
+    };
+  }
+
+  window.addEventListener('joulane:usersUpdated', () => renderUsersTab());
+}
+
+function resetUserForm() {
+  document.getElementById('user-form-id').value = '';
+  document.getElementById('user-name-input').value = '';
+  document.getElementById('user-role-input').value = '';
+  document.getElementById('user-passcode-input').value = '';
+  document.getElementById('user-perm-allow-stock').checked = true;
+  document.getElementById('user-perm-allow-admin').checked = false;
+  document.getElementById('user-perm-stock-add').checked = true;
+  document.getElementById('user-perm-stock-remove').checked = true;
+  document.getElementById('user-perm-stock-set').checked = false;
+  document.getElementById('user-perm-admin-orders').checked = false;
+  const title = document.getElementById('user-form-title');
+  if (title) title.innerHTML = '<i class="fa-solid fa-user-plus"></i> إضافة حساب مسؤول جديد';
+}
+
+function renderUsersTab() {
+  const container = document.getElementById('admin-users-list');
+  if (!container) return;
+
+  const users = Store.getUsers();
+
+  if (users.length === 0) {
+    container.innerHTML = '<p class="text-muted text-center py-4">لا يوجد حسابات مسجلة.</p>';
+    return;
+  }
+
+  let html = `
+    <div class="table-responsive">
+      <table class="table table-dark table-striped table-hover align-middle">
+        <thead>
+          <tr>
+            <th>الاسم والصفة</th>
+            <th>رمز الدخول (PIN)</th>
+            <th>صلاحيات اللوحات</th>
+            <th>صلاحيات العمليات</th>
+            <th class="text-end">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  users.forEach(u => {
+    const isSuper = u.id === 'usr_super_admin';
+    const allowStockBadge = u.allowStock ? '<span class="badge bg-success me-1">🟢 المخزن (#stock)</span>' : '<span class="badge bg-secondary me-1">⚪ مغلق</span>';
+    const allowAdminBadge = u.allowAdmin ? '<span class="badge bg-warning text-dark me-1">👑 الإدارة (#admin)</span>' : '<span class="badge bg-secondary me-1">⚪ مغلق</span>';
+
+    const p = u.permissions || {};
+    let opsBadges = '';
+    if (p.stockAdd) opsBadges += '<span class="badge bg-outline-success border border-success text-success me-1">+ إضافة</span>';
+    if (p.stockRemove) opsBadges += '<span class="badge bg-outline-danger border border-danger text-danger me-1">- سحب</span>';
+    if (p.stockSet) opsBadges += '<span class="badge bg-outline-info border border-info text-info me-1">= تعديل</span>';
+    if (p.adminOrders) opsBadges += '<span class="badge bg-outline-warning border border-warning text-warning me-1">📦 الطلبات</span>';
+
+    html += `
+      <tr>
+        <td>
+          <div class="fw-bold text-gold">${u.name}</div>
+          <small class="text-muted">${u.role || 'مسؤول'}</small>
+        </td>
+        <td>
+          <code class="px-2 py-1 bg-dark rounded border border-secondary text-warning fw-bold">${u.passcode}</code>
+        </td>
+        <td>${allowStockBadge} ${allowAdminBadge}</td>
+        <td>${opsBadges || '<span class="text-muted">قياسية</span>'}</td>
+        <td class="text-end">
+          ${isSuper ? '<span class="badge bg-secondary">حساب عام رئيسي</span>' : `
+            <button type="button" class="btn btn-sm btn-outline-warning btn-edit-user me-1" data-id="${u.id}"><i class="fa-solid fa-pen-to-square"></i> تعديل</button>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-delete-user" data-id="${u.id}"><i class="fa-solid fa-trash-can"></i> حذف</button>
+          `}
+        </td>
+      </tr>
+    `;
+  });
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+
+  // Bind edit & delete buttons
+  container.querySelectorAll('.btn-edit-user').forEach(btn => {
+    btn.onclick = (e) => {
+      const id = e.currentTarget.dataset.id;
+      const u = Store.getUsers().find(item => item.id === id);
+      if (u) {
+        document.getElementById('user-form-id').value = u.id;
+        document.getElementById('user-name-input').value = u.name;
+        document.getElementById('user-role-input').value = u.role;
+        document.getElementById('user-passcode-input').value = u.passcode;
+        document.getElementById('user-perm-allow-stock').checked = !!u.allowStock;
+        document.getElementById('user-perm-allow-admin').checked = !!u.allowAdmin;
+
+        const p = u.permissions || {};
+        document.getElementById('user-perm-stock-add').checked = !!p.stockAdd;
+        document.getElementById('user-perm-stock-remove').checked = !!p.stockRemove;
+        document.getElementById('user-perm-stock-set').checked = !!p.stockSet;
+        document.getElementById('user-perm-admin-orders').checked = !!p.adminOrders;
+
+        const title = document.getElementById('user-form-title');
+        if (title) title.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> تعديل حساب والصفة: ' + u.name;
+
+        const formCard = document.getElementById('admin-user-form-card');
+        if (formCard) formCard.classList.remove('hidden');
+      }
+    };
+  });
+
+  container.querySelectorAll('.btn-delete-user').forEach(btn => {
+    btn.onclick = (e) => {
+      const id = e.currentTarget.dataset.id;
+      const u = Store.getUsers().find(item => item.id === id);
+      if (u && confirm(`هل أنت تأكد من حذف حساب: ${u.name}؟`)) {
+        Store.deleteUser(id);
+        renderUsersTab();
+        window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: 'تم حذف الحساب بنجاح' }));
+      }
+    };
   });
 }

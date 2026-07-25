@@ -156,11 +156,17 @@ export function initStockPanel(refreshMainStoreFn) {
     loginForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const enteredPass = passInput.value.trim();
-      const correctPass = Store.getPasscode();
-      if (enteredPass === correctPass || enteredPass === '1234') {
-        showStockDashboard();
+      const user = Store.authenticateUser(enteredPass);
+      if (user) {
+        if (user.allowStock) {
+          sessionStorage.setItem('joulane_current_stock_user', JSON.stringify(user));
+          showStockDashboard();
+        } else {
+          alert(`عذراً يا ${user.name}! هذا الحساب مخصص لـ (لوحة التحكم #admin) فقط ولا يملك صلاحية الدخول للوحة المخزن.`);
+          passInput.select();
+        }
       } else {
-        alert('كلمة المرور غير صحيحة!');
+        alert('رمز الدخول غير صحيح!');
         passInput.select();
       }
     });
@@ -339,7 +345,16 @@ export function initStockPanel(refreshMainStoreFn) {
 
     if (entryQtyInput) entryQtyInput.value = '10';
 
-    const savedOperator = localStorage.getItem('joulane_last_operator') || '';
+    let savedOperator = '';
+    try {
+      const uJson = sessionStorage.getItem('joulane_current_stock_user');
+      if (uJson) {
+        const u = JSON.parse(uJson);
+        if (u && u.name) savedOperator = u.name;
+      }
+    } catch(e){}
+
+    if (!savedOperator) savedOperator = localStorage.getItem('joulane_last_operator') || '';
     if (entryOperatorInput) entryOperatorInput.value = savedOperator;
     if (entryNoteInput) entryNoteInput.value = '';
 

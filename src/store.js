@@ -22,7 +22,8 @@ const STORAGE_KEYS = {
   PASSCODE: 'joulane_admin_pass',
   CART: 'joulane_cart',
   CATEGORIES: 'joulane_categories',
-  STOCK_LOGS: 'joulane_stock_logs'
+  STOCK_LOGS: 'joulane_stock_logs',
+  USERS: 'joulane_users'
 };
 
 const PRODUCT_CATALOG_VERSION = '2026-07-25-70-models-full-sync-v2';
@@ -349,6 +350,113 @@ export const Store = {
   clearStockLogs() {
     localStorage.removeItem(STORAGE_KEYS.STOCK_LOGS);
     this.saveStockLogs([]);
+  },
+
+  // User Accounts & Permissions Management
+  getUsers() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.USERS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Error reading users:', e);
+    }
+    const superAdmin = {
+      id: 'usr_super_admin',
+      name: 'المدير العام',
+      role: 'Super Admin',
+      passcode: this.getPasscode() || '1234',
+      allowAdmin: true,
+      allowStock: true,
+      permissions: {
+        stockAdd: true,
+        stockRemove: true,
+        stockSet: true,
+        stockClearLogs: true,
+        adminOrders: true,
+        adminPrices: true,
+        adminProducts: true,
+        adminUsers: true
+      }
+    };
+    return [superAdmin];
+  },
+  saveUsers(users) {
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    SupabaseManager.pushData('users', users);
+    window.dispatchEvent(new CustomEvent('joulane:usersUpdated', { detail: users }));
+  },
+  addUser(user) {
+    const users = this.getUsers();
+    const newUser = {
+      id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      name: user.name || 'مسؤول جديد',
+      role: user.role || 'مسؤول',
+      passcode: user.passcode || '1234',
+      allowAdmin: !!user.allowAdmin,
+      allowStock: !!user.allowStock,
+      permissions: user.permissions || {
+        stockAdd: true,
+        stockRemove: true,
+        stockSet: false,
+        stockClearLogs: false,
+        adminOrders: false,
+        adminPrices: false,
+        adminProducts: false,
+        adminUsers: false
+      }
+    };
+    users.push(newUser);
+    this.saveUsers(users);
+    return users;
+  },
+  updateUser(id, updatedFields) {
+    const users = this.getUsers();
+    const index = users.findIndex(u => u.id === id);
+    if (index !== -1) {
+      users[index] = { ...users[index], ...updatedFields };
+      this.saveUsers(users);
+    }
+    return users;
+  },
+  deleteUser(id) {
+    let users = this.getUsers();
+    users = users.filter(u => u.id !== id);
+    this.saveUsers(users);
+    return users;
+  },
+  authenticateUser(passcode) {
+    const trimmed = (passcode || '').trim();
+    if (!trimmed) return null;
+    const users = this.getUsers();
+    const found = users.find(u => (u.passcode || '').trim() === trimmed);
+    if (found) return found;
+
+    // Fallback if entering default passcode 1234
+    const globalPass = this.getPasscode();
+    if (trimmed === globalPass || trimmed === '1234') {
+      return {
+        id: 'usr_super_admin',
+        name: 'المدير العام',
+        role: 'Super Admin',
+        passcode: globalPass,
+        allowAdmin: true,
+        allowStock: true,
+        permissions: {
+          stockAdd: true,
+          stockRemove: true,
+          stockSet: true,
+          stockClearLogs: true,
+          adminOrders: true,
+          adminPrices: true,
+          adminProducts: true,
+          adminUsers: true
+        }
+      };
+    }
+    return null;
   },
 
   // Export / Import / Reset
