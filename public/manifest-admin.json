@@ -1,8 +1,8 @@
 {
   "id": "/admin.html",
-  "short_name": "Joulane Admin",
+  "short_name": "Admin Joulane",
   "name": "Joulane Fashion Admin Panel",
-  "description": "Admin Panel for JOULANE Fashion",
+  "description": "Admin Control Panel for JOULANE Fashion",
   "icons": [
     {
       "src": "/images/logo.png",
