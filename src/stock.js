@@ -199,6 +199,11 @@ export function initStockPanel(refreshMainStoreFn) {
 
   if (clearLogsBtn) {
     clearLogsBtn.addEventListener('click', () => {
+      const perms = getCurrentUserPermissions();
+      if (!perms.stockClearLogs) {
+        alert('عذراً! حسابك لا يملك صلاحية مسح وتفريغ سجل الشحنات. السجل مخصص للاحتفاظ بالدليل والدقة.');
+        return;
+      }
       if (confirm('هل أنت تأكد من مسح جميع سجلات الإدخال السابقة؟')) {
         Store.clearStockLogs();
         renderStockLogs();
@@ -631,6 +636,10 @@ export function initStockPanel(refreshMainStoreFn) {
 
   // --- Render Stock History Logs (Tab 2) ---
   function renderStockLogs() {
+    const perms = getCurrentUserPermissions();
+    if (clearLogsBtn) {
+      clearLogsBtn.style.display = perms.stockClearLogs ? 'inline-flex' : 'none';
+    }
     const logs = Store.getStockLogs();
     const query = logsSearchInput ? logsSearchInput.value.trim().toLowerCase() : '';
 

@@ -1240,6 +1240,7 @@ function setupUsersTab() {
         stockAdd: document.getElementById('user-perm-stock-add').checked,
         stockRemove: document.getElementById('user-perm-stock-remove').checked,
         stockSet: document.getElementById('user-perm-stock-set').checked,
+        stockClearLogs: !!document.getElementById('user-perm-stock-clear-logs')?.checked,
         adminOrders: document.getElementById('user-perm-admin-orders').checked
       };
 
@@ -1269,6 +1270,7 @@ function resetUserForm() {
   document.getElementById('user-perm-stock-add').checked = true;
   document.getElementById('user-perm-stock-remove').checked = true;
   document.getElementById('user-perm-stock-set').checked = false;
+  if (document.getElementById('user-perm-stock-clear-logs')) document.getElementById('user-perm-stock-clear-logs').checked = false;
   document.getElementById('user-perm-admin-orders').checked = false;
   const title = document.getElementById('user-form-title');
   if (title) title.innerHTML = '<i class="fa-solid fa-user-plus"></i> إضافة حساب مسؤول جديد';
@@ -1310,6 +1312,7 @@ function renderUsersTab() {
     if (p.stockAdd) opsBadges += '<span class="badge bg-outline-success border border-success text-success me-1">+ إضافة</span>';
     if (p.stockRemove) opsBadges += '<span class="badge bg-outline-danger border border-danger text-danger me-1">- سحب</span>';
     if (p.stockSet) opsBadges += '<span class="badge bg-outline-info border border-info text-info me-1">= تعديل</span>';
+    if (p.stockClearLogs) opsBadges += '<span class="badge bg-outline-danger border border-danger text-danger me-1">🗑️ تفريغ السجل</span>';
     if (p.adminOrders) opsBadges += '<span class="badge bg-outline-warning border border-warning text-warning me-1">📦 الطلبات</span>';
 
     html += `
@@ -1353,6 +1356,7 @@ function renderUsersTab() {
         document.getElementById('user-perm-stock-add').checked = !!p.stockAdd;
         document.getElementById('user-perm-stock-remove').checked = !!p.stockRemove;
         document.getElementById('user-perm-stock-set').checked = !!p.stockSet;
+        if (document.getElementById('user-perm-stock-clear-logs')) document.getElementById('user-perm-stock-clear-logs').checked = !!p.stockClearLogs;
         document.getElementById('user-perm-admin-orders').checked = !!p.adminOrders;
 
         const title = document.getElementById('user-form-title');
