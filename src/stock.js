@@ -53,10 +53,8 @@ export function initStockPanel(refreshMainStoreFn) {
             window.deferredPrompt = null;
         });
       } else {
-        const confirmed = confirm('لتحميل ملف التطبيق (APK) مباشرة اضغط موافق');
-        if (confirmed) {
-            window.location.href = '/Stock_Joulane.apk';
-        }
+        // Redirect to dedicated stock.html page for PWA install
+        window.location.href = '/stock.html';
       }
     });
   }

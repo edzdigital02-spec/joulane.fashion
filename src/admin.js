@@ -80,7 +80,8 @@ export function initAdmin(refreshMainStoreFn) {
             window.deferredPrompt = null;
         });
       } else {
-        alert('لم يتم العثور على مثبت تلقائي. لتثبيت تطبيق الإدارة، يرجى الضغط على خيارات المتصفح (الثلاث نقاط) واختيار "تثبيت التطبيق" (Install App أو Add to Home Screen).');
+        // Redirect to dedicated admin.html page for PWA install
+        window.location.href = '/admin.html';
       }
     });
   }
