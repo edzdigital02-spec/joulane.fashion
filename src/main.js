@@ -1132,21 +1132,9 @@ function showToast(message, type = 'info') {
   }, 3200);
 }
 
-// PWA Install Prompt Logic (Only for #stock panel)
+// PWA Install Prompt Logic (Stored for #stock panel)
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
-  deferredPrompt = e;
-  
-  if (window.location.hash === '#stock') {
-    deferredPrompt.prompt();
-    deferredPrompt = null;
-  }
-});
-
-window.addEventListener('hashchange', () => {
-  if (window.location.hash === '#stock' && deferredPrompt) {
-    deferredPrompt.prompt();
-    deferredPrompt = null;
-  }
+  window.deferredPrompt = e;
 });

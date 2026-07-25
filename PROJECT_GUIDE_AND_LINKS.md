@@ -7,10 +7,10 @@
 ## 🌐 1. روابط المتجر الأساسية (الروابط الحية والمحلية)
 
 ### 🛍️ المتجر المباشر على الإنترنت (الذي يراه الزبائن):
-- **رابط المتجر:** [https://tiny-salmiakki-736218.netlify.app/](https://tiny-salmiakki-736218.netlify.app/)
-- **رابط لوحة التحكم الرئيسية أونلاين:** [https://tiny-salmiakki-736218.netlify.app/#admin](https://tiny-salmiakki-736218.netlify.app/#admin)
-- **رابط لوحة إدارة المخزون المخصصة للعمال أونلاين:** [https://tiny-salmiakki-736218.netlify.app/#stock](https://tiny-salmiakki-736218.netlify.app/#stock)
-- **رابط تطبيق أندرويد لتثبيته فوراً (Stock Joulane APK):** [https://tiny-salmiakki-736218.netlify.app/Stock_Joulane.apk](https://tiny-salmiakki-736218.netlify.app/Stock_Joulane.apk)
+- **رابط المتجر:** [https://joulane-fashiondz.vercel.app/](https://joulane-fashiondz.vercel.app/)
+- **رابط لوحة التحكم الرئيسية أونلاين:** [https://joulane-fashiondz.vercel.app/#admin](https://joulane-fashiondz.vercel.app/#admin)
+- **رابط لوحة إدارة المخزون المخصصة للعمال أونلاين:** [https://joulane-fashiondz.vercel.app/#stock](https://joulane-fashiondz.vercel.app/#stock)
+- **رابط تطبيق أندرويد لتثبيته فوراً (Stock Joulane APK):** [https://joulane-fashiondz.vercel.app/Stock_Joulane.apk](https://joulane-fashiondz.vercel.app/Stock_Joulane.apk)
 - **مسار ملف الـ APK الحقيقي على سطح مكتب حاسوبك:** `C:\Users\GAMER ZONE\Desktop\Joulane\Stock_Joulane.apk`
   - 🔑 **رمز المرور الافتراضي للوحات:** `1234`
 
@@ -28,7 +28,7 @@
 | المنصة | الغرض والوظيفة | رابط لوحة التحكم للمنصة |
 | :--- | :--- | :--- |
 | **Supabase** | قاعدة البيانات السحابية الحية (المسؤولة عن السينك والمزامنة الفورية بين حاسوبك والموقع أونلاين ولوحة المخزن في الوقت الحقيقي) | [https://supabase.com/dashboard/project/jsnsmqwznjllqmnzfrx](https://supabase.com/dashboard/project/jsnsmqwznjllqmnzfrx) |
-| **Netlify** | استضافة الموقع واستضافة السيرفر المباشر على الإنترنت | [https://app.netlify.com/projects/tiny-salmiakki-736218](https://app.netlify.com/projects/tiny-salmiakki-736218) |
+| **Vercel** | استضافة الموقع واستضافة السيرفر المباشر على الإنترنت | [https://vercel.com/](https://vercel.com/) |
 | **Cloudinary** | استضافة الصور وسحابة تخزين صور المنتجات والأحذية فائقة السرعة | [https://console.cloudinary.com/](https://console.cloudinary.com/) |
 | **GitHub** | مستودع حفظ الشفرة المصدرية والكود المصدري للمشروع | [https://github.com/edzdigital02-spec/joulane.fashion](https://github.com/edzdigital02-spec/joulane.fashion) |
 

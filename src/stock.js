@@ -10,6 +10,7 @@ export function initStockPanel(refreshMainStoreFn) {
   const loginForm = document.getElementById('stock-login-form');
   const closeStockBtn = document.getElementById('close-stock-modal');
   const logoutStockBtn = document.getElementById('stock-logout-btn');
+  const installApkBtn = document.getElementById('stock-install-apk-btn');
 
   const searchInput = document.getElementById('stock-search-input');
   const categoryFilter = document.getElementById('stock-cat-filter');
@@ -41,6 +42,22 @@ export function initStockPanel(refreshMainStoreFn) {
       sessionStorage.removeItem('joulane_stock_auth');
       localStorage.removeItem('joulane_stock_auth');
       showLoginScreen();
+    });
+  }
+
+  if (installApkBtn) {
+    installApkBtn.addEventListener('click', () => {
+      if (window.deferredPrompt) {
+        window.deferredPrompt.prompt();
+        window.deferredPrompt.userChoice.then(() => {
+            window.deferredPrompt = null;
+        });
+      } else {
+        const confirmed = confirm('لتحميل ملف التطبيق (APK) مباشرة اضغط موافق');
+        if (confirmed) {
+            window.location.href = '/Stock_Joulane.apk';
+        }
+      }
     });
   }
 
@@ -83,6 +100,10 @@ export function initStockPanel(refreshMainStoreFn) {
       const correctPass = Store.getPasscode();
       if (enteredPass === correctPass || enteredPass === '1234') {
         showStockDashboard();
+        if (window.deferredPrompt) {
+          window.deferredPrompt.prompt();
+          window.deferredPrompt = null;
+        }
       } else {
         alert('كلمة المرور غير صحيحة!');
         passInput.select();
