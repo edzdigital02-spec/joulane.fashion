@@ -1,0 +1,26 @@
+{
+  "id": "/#admin",
+  "short_name": "Joulane Admin",
+  "name": "Joulane Fashion Admin Panel",
+  "description": "Admin Panel for JOULANE Fashion",
+  "icons": [
+    {
+      "src": "/images/logo.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/images/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/#admin",
+  "scope": "/",
+  "background_color": "#0d0d0d",
+  "theme_color": "#c99332",
+  "display": "standalone",
+  "orientation": "portrait"
+}

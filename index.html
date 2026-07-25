@@ -10,7 +10,24 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Joulane Fashion" />
-  <link rel="manifest" href="/manifest.json" />
+  <link id="app-manifest" rel="manifest" href="/manifest.json" />
+  <script>
+    function updateManifest() {
+      var hash = window.location.hash;
+      var manifestLink = document.getElementById('app-manifest');
+      if (manifestLink) {
+        if (hash === '#admin') {
+          manifestLink.href = '/manifest-admin.json';
+        } else if (hash === '#stock') {
+          manifestLink.href = '/manifest-stock.json';
+        } else {
+          manifestLink.href = '/manifest.json';
+        }
+      }
+    }
+    updateManifest();
+    window.addEventListener('hashchange', updateManifest);
+  </script>
   <link rel="apple-touch-icon" href="/images/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -347,6 +364,7 @@
               </div>
             </div>
             <div class="admin-actions">
+              <button id="admin-install-apk-btn" class="btn btn-gold btn-sm" title="تثبيت التطبيق"><i class="fa-solid fa-download"></i> تثبيت التطبيق</button>
               <a href="#stock" id="open-stock-direct-btn" class="btn btn-gold btn-sm"><i class="fa-solid fa-boxes-stacked"></i> لوحة المخزن المباشرة (#stock)</a>
               <button id="admin-logout-btn" class="btn btn-outline-gold btn-sm"><i class="fa-solid fa-right-from-bracket"></i> خروج</button>
             </div>

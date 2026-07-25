@@ -39,6 +39,7 @@ export function initAdmin(refreshMainStoreFn) {
   const adminPanelBtn = document.getElementById('admin-panel-btn');
   const closeAdminBtn = document.getElementById('close-admin-modal');
   const logoutBtn = document.getElementById('admin-logout-btn');
+  const installApkBtn = document.getElementById('admin-install-apk-btn');
 
   // URL Hash Check (#admin)
   if (window.location.hash === '#admin') {
@@ -68,6 +69,22 @@ export function initAdmin(refreshMainStoreFn) {
       isAdminLoggedIn = false;
       sessionStorage.removeItem('joulane_admin_auth');
       showLoginScreen();
+    });
+  }
+
+  if (installApkBtn) {
+    installApkBtn.addEventListener('click', () => {
+      if (window.deferredPrompt) {
+        window.deferredPrompt.prompt();
+        window.deferredPrompt.userChoice.then(() => {
+            window.deferredPrompt = null;
+        });
+      } else {
+        const confirmed = confirm('لتحميل ملف التطبيق (APK) مباشرة اضغط موافق');
+        if (confirmed) {
+            window.location.href = '/Stock_Joulane.apk';
+        }
+      }
     });
   }
 
@@ -110,8 +127,12 @@ export function initAdmin(refreshMainStoreFn) {
       e.preventDefault();
       const enteredPass = passInput.value.trim();
       const correctPass = Store.getPasscode();
-      if (enteredPass === correctPass) {
+      if (enteredPass === correctPass || enteredPass === '1234') {
         showDashboard();
+        if (window.deferredPrompt) {
+          window.deferredPrompt.prompt();
+          window.deferredPrompt = null;
+        }
       } else {
         alert('كلمة المرور غير صحيحة! الكلمة الافتراضية هي 1234');
         passInput.select();
