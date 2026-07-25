@@ -1,0 +1,42 @@
+{
+  "id": "/",
+  "short_name": "Joulane",
+  "name": "JOULANE Fashion",
+  "description": "JOULANE Fashion wholesale women's shoes store",
+  "icons": [
+    {
+      "src": "/images/logo.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/images/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "background_color": "#0d0d0d",
+  "theme_color": "#c99332",
+  "display": "standalone",
+  "orientation": "portrait",
+  "shortcuts": [
+    {
+      "name": "Stock Joulane",
+      "short_name": "Stock",
+      "description": "Open the stock management panel",
+      "url": "/#stock",
+      "icons": [
+        {
+          "src": "/images/logo.png",
+          "type": "image/png",
+          "sizes": "192x192",
+          "purpose": "any maskable"
+        }
+      ]
+    }
+  ]
+}
