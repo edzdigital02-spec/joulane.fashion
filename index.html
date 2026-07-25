@@ -325,11 +325,18 @@
             <h2>لوحة تحكم الإدارة</h2>
             <p>أدخل كلمة مرور الإدارة للوصول إلى لوحة التحكم (الافتراضية: <strong>1234</strong>)</p>
             <form id="admin-login-form" onsubmit="return false;">
-              <div class="form-group">
-                <input type="password" id="admin-pass-input" class="form-control text-center" placeholder="****" autocomplete="current-password" required />
+              <div class="form-group mb-3">
+                <label style="font-size: 0.85rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block; text-align: right;">اسم المستخدم / الحساب:</label>
+                <select id="admin-user-select" class="form-control select-dark text-center" style="font-weight: 700;">
+                  <option value="all">-- اختر حسابك أو أدخل كودك --</option>
+                </select>
               </div>
-              <button type="submit" id="admin-pass-submit" class="btn btn-gold btn-block btn-lg">
-                <i class="fa-solid fa-lock-open"></i> تسجيل الدخول
+              <div class="form-group mb-3">
+                <label style="font-size: 0.85rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block; text-align: right;">كلمة المرور / PIN:</label>
+                <input type="password" id="admin-pass-input" class="form-control text-center" placeholder="كلمة المرور (الافتراضية: 1234)" autocomplete="current-password" required />
+              </div>
+              <button type="submit" id="admin-pass-submit" class="btn btn-gold btn-block btn-lg" style="font-weight: 800;">
+                <i class="fa-solid fa-lock-open"></i> تسجيل الدخول للوحة التحكم
               </button>
             </form>
           </div>
@@ -1286,10 +1293,17 @@
           <h4>دخول عمال ومسؤولي المخزن</h4>
           <p>أدخل رمز الدخول لإدارة مخزون الكراطين والموديلات</p>
           <form id="stock-login-form">
-            <div class="form-group">
+            <div class="form-group mb-3">
+              <label style="font-size: 0.85rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block; text-align: right;">اسم العامل / المسؤول:</label>
+              <select id="stock-user-select" class="form-control select-dark text-center" style="font-weight: 700;">
+                <option value="all">-- اختر اسم العامل / المسؤول --</option>
+              </select>
+            </div>
+            <div class="form-group mb-3">
+              <label style="font-size: 0.85rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block; text-align: right;">رمز الدخول الخاص (PIN):</label>
               <input type="password" id="stock-pass-input" class="form-control text-center" placeholder="رمز الدخول (1234)" required />
             </div>
-            <button type="submit" class="btn btn-gold btn-block btn-lg">
+            <button type="submit" class="btn btn-gold btn-block btn-lg" style="font-weight: 800;">
               <i class="fa-solid fa-key"></i> فتح لوحة المخزن
             </button>
           </form>

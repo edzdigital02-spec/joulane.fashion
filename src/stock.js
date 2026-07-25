@@ -131,10 +131,24 @@ export function initStockPanel(refreshMainStoreFn) {
     }
   }
 
+  function populateStockUsersSelect() {
+    const select = document.getElementById('stock-user-select');
+    if (!select) return;
+    const users = Store.getUsers();
+    let html = '<option value="all">-- اختر اسم العامل / المسؤول --</option>';
+    users.forEach(u => {
+      if (u.allowStock || u.id === 'usr_super_admin') {
+        html += `<option value="${u.id}">${u.name} (${u.role || 'عامل مخزن'})</option>`;
+      }
+    });
+    select.innerHTML = html;
+  }
+
   function showLoginScreen() {
     if (loginSec) loginSec.classList.remove('hidden');
     if (contentSec) contentSec.classList.add('hidden');
     if (gridContainer) gridContainer.innerHTML = '';
+    populateStockUsersSelect();
     if (passInput) {
       passInput.value = '';
       setTimeout(() => passInput.focus(), 100);
@@ -155,22 +169,27 @@ export function initStockPanel(refreshMainStoreFn) {
   if (loginForm) {
     loginForm.addEventListener('submit', (e) => {
       e.preventDefault();
+      const selectedUserId = document.getElementById('stock-user-select')?.value || 'all';
       const enteredPass = passInput.value.trim();
-      const user = Store.authenticateUser(enteredPass);
+      const user = Store.authenticateUser(selectedUserId, enteredPass);
+
       if (user) {
-        if (user.allowStock) {
+        if (user.allowStock || user.id === 'usr_super_admin') {
           sessionStorage.setItem('joulane_current_stock_user', JSON.stringify(user));
           showStockDashboard();
+          window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: `مرحباً بك يا ${user.name} في لوحة المخزن!` }));
         } else {
           alert(`عذراً يا ${user.name}! هذا الحساب مخصص لـ (لوحة التحكم #admin) فقط ولا يملك صلاحية الدخول للوحة المخزن.`);
-          passInput.select();
+          if (passInput) passInput.select();
         }
       } else {
-        alert('رمز الدخول غير صحيح!');
-        passInput.select();
+        alert('اسم المستخدم أو كلمة المرور غير صحيحة! يرجى اختيار حسابك وإدخال الرمز الصحيح.');
+        if (passInput) passInput.select();
       }
     });
   }
+
+  window.addEventListener('joulane:usersUpdated', () => populateStockUsersSelect());
 
   // Live Search & Filters
   if (searchInput) searchInput.addEventListener('input', () => renderStockDashboard());

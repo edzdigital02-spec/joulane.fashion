@@ -95,11 +95,27 @@ export function initAdmin(refreshMainStoreFn) {
     }
   }
 
+  function populateAdminUsersSelect() {
+    const select = document.getElementById('admin-user-select');
+    if (!select) return;
+    const users = Store.getUsers();
+    let html = '<option value="all">-- اختر حسابك أو أدخل كودك مباشرة --</option>';
+    users.forEach(u => {
+      if (u.allowAdmin || u.id === 'usr_super_admin') {
+        html += `<option value="${u.id}">${u.name} (${u.role || 'مسؤول'})</option>`;
+      }
+    });
+    select.innerHTML = html;
+  }
+
   function showLoginScreen() {
     loginSec.classList.remove('hidden');
     contentSec.classList.add('hidden');
-    passInput.value = '';
-    setTimeout(() => passInput.focus(), 100);
+    populateAdminUsersSelect();
+    if (passInput) {
+      passInput.value = '';
+      setTimeout(() => passInput.focus(), 100);
+    }
   }
 
   function showDashboard() {
@@ -124,22 +140,27 @@ export function initAdmin(refreshMainStoreFn) {
   if (loginForm) {
     loginForm.addEventListener('submit', (e) => {
       e.preventDefault();
+      const selectedUserId = document.getElementById('admin-user-select')?.value || 'all';
       const enteredPass = passInput.value.trim();
-      const user = Store.authenticateUser(enteredPass);
+      const user = Store.authenticateUser(selectedUserId, enteredPass);
+
       if (user) {
-        if (user.allowAdmin) {
+        if (user.allowAdmin || user.id === 'usr_super_admin') {
           sessionStorage.setItem('joulane_current_user', JSON.stringify(user));
           showDashboard();
+          window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: `مرحباً بك يا ${user.name}!` }));
         } else {
           alert(`عذراً يا ${user.name}! هذا الحساب مخصص لـ (لوحة المخزن #stock) فقط ولا يملك صلاحية الدخول للوحة التحكم الرئيسية.`);
-          passInput.select();
+          if (passInput) passInput.select();
         }
       } else {
-        alert('رمز الدخول غير صحيح!');
-        passInput.select();
+        alert('اسم المستخدم أو كلمة المرور غير صحيحة! يرجى اختيار حسابك وإدخال الرمز الصحيح.');
+        if (passInput) passInput.select();
       }
     });
   }
+
+  window.addEventListener('joulane:usersUpdated', () => populateAdminUsersSelect());
 
   // Tabs Navigation
   const tabBtns = document.querySelectorAll('.admin-tab-btn');

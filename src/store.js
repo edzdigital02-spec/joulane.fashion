@@ -427,17 +427,43 @@ export const Store = {
     this.saveUsers(users);
     return users;
   },
-  authenticateUser(passcode) {
-    const trimmed = (passcode || '').trim();
-    if (!trimmed) return null;
+  authenticateUser(usernameOrId, passcode) {
     const users = this.getUsers();
-    const found = users.find(u => (u.passcode || '').trim() === trimmed);
-    if (found) return found;
-
-    // Fallback if entering default passcode 1234
     const globalPass = this.getPasscode();
-    if (trimmed === globalPass || trimmed === '1234') {
-      return {
+    const passTrimmed = (passcode || '').trim();
+    const userTrimmed = (usernameOrId || '').trim();
+
+    if (!passTrimmed) return null;
+
+    // If username is provided, match both username/id AND passcode
+    if (userTrimmed && userTrimmed !== 'all') {
+      const matched = users.find(u =>
+        (u.id === userTrimmed || u.name.toLowerCase() === userTrimmed.toLowerCase()) &&
+        (u.passcode || '').trim() === passTrimmed
+      );
+      if (matched) return matched;
+      
+      // Check if super admin login via username
+      if ((userTrimmed === 'usr_super_admin' || userTrimmed === 'المدير العام') && (passTrimmed === globalPass || passTrimmed === '1234')) {
+        return users.find(u => u.id === 'usr_super_admin') || {
+          id: 'usr_super_admin',
+          name: 'المدير العام',
+          role: 'Super Admin',
+          passcode: globalPass,
+          allowAdmin: true,
+          allowStock: true,
+          permissions: { stockAdd: true, stockRemove: true, stockSet: true, stockClearLogs: true, adminOrders: true, adminPrices: true, adminProducts: true, adminUsers: true }
+        };
+      }
+      return null;
+    }
+
+    // If no username specified or 'all', try matching by passcode alone
+    const matchedByPass = users.find(u => (u.passcode || '').trim() === passTrimmed);
+    if (matchedByPass) return matchedByPass;
+
+    if (passTrimmed === globalPass || passTrimmed === '1234') {
+      return users.find(u => u.id === 'usr_super_admin') || {
         id: 'usr_super_admin',
         name: 'المدير العام',
         role: 'Super Admin',
