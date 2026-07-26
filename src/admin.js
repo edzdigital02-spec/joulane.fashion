@@ -721,7 +721,7 @@ function setupCmsForm(refreshMainStoreFn) {
   }
 
   if (form) {
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const formData = new FormData(form);
       const updatedConfig = Store.getConfig();
@@ -730,9 +730,11 @@ function setupCmsForm(refreshMainStoreFn) {
         updatedConfig[key] = val.trim();
       }
 
-      Store.saveConfig(updatedConfig);
+      const synced = await Store.saveConfig(updatedConfig);
       if (refreshMainStoreFn) refreshMainStoreFn();
-      alert('تم حفظ كل تعديلات الواجهة بنجاح! التغييرات ظهرت الآن مباشرة على المتجر.');
+      alert(synced
+        ? 'تم حفظ التعديلات ومزامنتها مع السحابة بنجاح.'
+        : 'تم حفظ التعديلات على هذا الجهاز، وستتم مزامنتها تلقائياً عند عودة الاتصال.');
     });
   }
 }
@@ -1217,17 +1219,18 @@ function setupSupabaseConfigForm(refreshMainStoreFn) {
     currentConfig.supabaseAnonKey = key;
     currentConfig.supabaseEnabled = !!(url && key);
 
-    Store.saveConfig(currentConfig);
-
     if (url && key) {
       if (statusSpan) {
         statusSpan.textContent = '⏳ جاري الاتصال والمزامنة مع Supabase...';
         statusSpan.style.color = '#f59e0b';
       }
-      const ok = await Store.initSupabase(refreshMainStoreFn);
+      const saved = await Store.saveConfig(currentConfig);
+      const ok = await Store.initSupabase(refreshMainStoreFn, { force: true });
       if (ok) {
         if (statusSpan) {
-          statusSpan.textContent = '🟢 تم الاتصال والمزامنة الفورية بنجاح!';
+          statusSpan.textContent = saved
+            ? '🟢 تم الاتصال وحفظ الإعدادات في السحابة.'
+            : '🟡 تم الاتصال، والحفظ منتظر المزامنة.';
           statusSpan.style.color = '#22c55e';
         }
         window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: 'تم تفعيل الربط التلقائي والسينك مع Supabase!' }));
@@ -1238,6 +1241,7 @@ function setupSupabaseConfigForm(refreshMainStoreFn) {
         }
       }
     } else {
+      await Store.saveConfig(currentConfig);
       if (statusSpan) {
         statusSpan.textContent = '⚪ تم تعطيل سينك Supabase.';
         statusSpan.style.color = '#94a3b8';

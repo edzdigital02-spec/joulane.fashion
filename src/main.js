@@ -1,4 +1,5 @@
 import { Store } from './store.js';
+import { Capacitor } from '@capacitor/core';
 
 import { initAdmin } from './admin.js';
 import { initStockPanel } from './stock.js';
@@ -198,8 +199,20 @@ document.addEventListener('DOMContentLoaded', () => {
   renderApp();
   initEventListeners();
 
-  initAdmin(renderApp);
-  initStockPanel(renderApp);
+  const nativeSurface = Capacitor.isNativePlatform()
+    ? (window.location.pathname.endsWith('/admin.html')
+      ? 'admin'
+      : window.location.pathname.endsWith('/stock.html') ? 'stock' : 'customer')
+    : 'web';
+
+  if (nativeSurface !== 'web') {
+    ['admin-install-apk-btn', 'stock-install-apk-btn'].forEach(id => {
+      document.getElementById(id)?.remove();
+    });
+  }
+
+  if (nativeSurface === 'web' || nativeSurface === 'admin') initAdmin(renderApp);
+  if (nativeSurface === 'web' || nativeSurface === 'stock') initStockPanel(renderApp);
   Store.initSupabase(renderApp);
 
 

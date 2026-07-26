@@ -1,0 +1,8 @@
+{
+  "appId": "com.joulane.admin",
+  "appName": "Joulane Admin",
+  "webDir": "dist",
+  "server": {
+    "appStartPath": "/admin.html"
+  }
+}

@@ -23,53 +23,204 @@ const STORAGE_KEYS = {
   CART: 'joulane_cart',
   CATEGORIES: 'joulane_categories',
   STOCK_LOGS: 'joulane_stock_logs',
-  USERS: 'joulane_users'
+  USERS: 'joulane_users',
+  PENDING_SYNC: 'joulane_pending_sync'
 };
 
 const PRODUCT_CATALOG_VERSION = '2026-07-25-70-models-full-sync-v2';
 
-export const Store = {
-  // Supabase Integration
-  async initSupabase(refreshFn) {
-    const config = this.getConfig();
-    if (!config.supabaseUrl || !config.supabaseAnonKey) return false;
+const CLOUD_RECORDS = {
+  config: { storageKey: STORAGE_KEYS.CONFIG, eventName: 'joulane:configUpdated' },
+  products: { storageKey: STORAGE_KEYS.PRODUCTS, eventName: 'joulane:productsUpdated' },
+  categories: { storageKey: STORAGE_KEYS.CATEGORIES, eventName: 'joulane:categoriesUpdated' },
+  orders: { storageKey: STORAGE_KEYS.ORDERS, eventName: 'joulane:ordersUpdated' },
+  shipping: { storageKey: STORAGE_KEYS.SHIPPING, eventName: 'joulane:shippingUpdated' },
+  stock_logs: { storageKey: STORAGE_KEYS.STOCK_LOGS, eventName: 'joulane:stockLogsUpdated' },
+  users: { storageKey: STORAGE_KEYS.USERS, eventName: 'joulane:usersUpdated' }
+};
 
-    const client = SupabaseManager.init(config.supabaseUrl, config.supabaseAnonKey, (key, data) => {
-      // Realtime update handler when data changes in Supabase
-      if (key === 'config') {
-        localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(data));
-        window.dispatchEvent(new CustomEvent('joulane:configUpdated', { detail: data }));
-      } else if (key === 'products') {
-        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data));
-        window.dispatchEvent(new CustomEvent('joulane:productsUpdated', { detail: data }));
-      } else if (key === 'categories') {
-        localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(data));
-        window.dispatchEvent(new CustomEvent('joulane:categoriesUpdated', { detail: data }));
-      } else if (key === 'orders') {
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(data));
-        window.dispatchEvent(new CustomEvent('joulane:ordersUpdated', { detail: data }));
-      } else if (key === 'shipping') {
-        localStorage.setItem(STORAGE_KEYS.SHIPPING, JSON.stringify(data));
-        window.dispatchEvent(new CustomEvent('joulane:shippingUpdated', { detail: data }));
+const PRIVATE_CONFIG_KEYS = new Set([
+  'supabaseUrl',
+  'supabaseAnonKey',
+  'supabaseEnabled',
+  'adminPasscode'
+]);
+
+function configForCloud(config) {
+  const safeConfig = { ...config, _savedAt: new Date().toISOString() };
+  PRIVATE_CONFIG_KEYS.forEach(key => delete safeConfig[key]);
+  return safeConfig;
+}
+
+function applyCloudRecord(key, data, dispatchEvent = true) {
+  const record = CLOUD_RECORDS[key];
+  if (!record || data === undefined || data === null) return false;
+
+  let value = data;
+  if (key === 'config') {
+    const localRaw = localStorage.getItem(STORAGE_KEYS.CONFIG);
+    let localConfig = {};
+    try {
+      localConfig = localRaw ? JSON.parse(localRaw) : {};
+    } catch (e) {
+      console.warn('Could not parse local config while applying cloud data:', e);
+    }
+
+    const publicConfig = { ...data };
+    PRIVATE_CONFIG_KEYS.forEach(privateKey => delete publicConfig[privateKey]);
+    delete publicConfig._savedAt;
+    value = {
+      ...DEFAULT_CONFIG,
+      ...localConfig,
+      ...publicConfig,
+      supabaseUrl: localConfig.supabaseUrl || DEFAULT_CONFIG.supabaseUrl,
+      supabaseAnonKey: localConfig.supabaseAnonKey || DEFAULT_CONFIG.supabaseAnonKey,
+      supabaseEnabled: localConfig.supabaseEnabled ?? DEFAULT_CONFIG.supabaseEnabled,
+      adminPasscode: localConfig.adminPasscode || DEFAULT_CONFIG.adminPasscode
+    };
+  }
+
+  localStorage.setItem(record.storageKey, JSON.stringify(value));
+  if (dispatchEvent) {
+    window.dispatchEvent(new CustomEvent(record.eventName, { detail: value }));
+  }
+  return true;
+}
+
+export const Store = {
+  _cloudHydrated: false,
+  _initializingCloud: null,
+
+  // Supabase Integration
+  async initSupabase(refreshFn, options = {}) {
+    const config = this.getConfig();
+    if (!config.supabaseEnabled || !config.supabaseUrl || !config.supabaseAnonKey) return false;
+
+    const force = options.force === true;
+    if (!force && this._cloudHydrated && SupabaseManager.isConnectedTo(config.supabaseUrl, config.supabaseAnonKey)) {
+      return true;
+    }
+    if (this._initializingCloud) return this._initializingCloud;
+
+    this._initializingCloud = (async () => {
+      const client = SupabaseManager.init(config.supabaseUrl, config.supabaseAnonKey, (key, data) => {
+        if (applyCloudRecord(key, data)) {
+          if (refreshFn) refreshFn();
+          window.dispatchEvent(new CustomEvent('joulane:refreshStore'));
+        }
+      });
+
+      if (!client) return false;
+
+      const remoteData = await SupabaseManager.fetchAllData();
+      if (remoteData === null) {
+        window.dispatchEvent(new CustomEvent('joulane:syncStatus', {
+          detail: { connected: false, message: 'تعذر قراءة بيانات Supabase.' }
+        }));
+        return false;
       }
+
+      Object.entries(CLOUD_RECORDS).forEach(([key]) => {
+        if (Object.prototype.hasOwnProperty.call(remoteData, key)) {
+          applyCloudRecord(key, remoteData[key], false);
+        }
+      });
+
+      // Migrate existing browser/app data to the cloud only when a cloud row is absent.
+      for (const [key, record] of Object.entries(CLOUD_RECORDS)) {
+        if (Object.prototype.hasOwnProperty.call(remoteData, key)) continue;
+        const localValue = localStorage.getItem(record.storageKey);
+        if (!localValue) continue;
+
+        try {
+          const parsed = JSON.parse(localValue);
+          const payload = key === 'config' ? configForCloud(parsed) : parsed;
+          const migrated = await SupabaseManager.pushData(key, payload);
+          if (!migrated) this.queuePendingSync(key, payload);
+        } catch (e) {
+          console.warn(`Could not migrate local ${key} data to Supabase:`, e);
+        }
+      }
+
+      this._cloudHydrated = true;
+      await this.flushPendingSync();
+
       if (refreshFn) refreshFn();
       window.dispatchEvent(new CustomEvent('joulane:refreshStore'));
-    });
+      window.dispatchEvent(new CustomEvent('joulane:syncStatus', {
+        detail: { connected: true, message: 'تمت مزامنة البيانات مع Supabase.' }
+      }));
+      return true;
+    })();
 
-    if (client) {
-      // Initial fetch of remote state
-      const remoteData = await SupabaseManager.fetchAllData();
-      if (remoteData) {
-        if (remoteData.config) localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(remoteData.config));
-        if (remoteData.products) localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(remoteData.products));
-        if (remoteData.categories) localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(remoteData.categories));
-        if (remoteData.orders) localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(remoteData.orders));
-        if (remoteData.shipping) localStorage.setItem(STORAGE_KEYS.SHIPPING, JSON.stringify(remoteData.shipping));
-        if (refreshFn) refreshFn();
+    try {
+      return await this._initializingCloud;
+    } finally {
+      this._initializingCloud = null;
+    }
+  },
+
+  async ensureSupabaseConnection() {
+    const config = this.getConfig();
+    if (!config.supabaseEnabled || !config.supabaseUrl || !config.supabaseAnonKey) return false;
+
+    if (SupabaseManager.isConnectedTo(config.supabaseUrl, config.supabaseAnonKey)) return true;
+
+    const client = SupabaseManager.init(config.supabaseUrl, config.supabaseAnonKey, (key, data) => {
+      if (applyCloudRecord(key, data)) {
         window.dispatchEvent(new CustomEvent('joulane:refreshStore'));
       }
-    }
+    });
+    this._cloudHydrated = false;
     return !!client;
+  },
+
+  queuePendingSync(key, data) {
+    let pending = {};
+    try {
+      pending = JSON.parse(localStorage.getItem(STORAGE_KEYS.PENDING_SYNC) || '{}');
+    } catch (e) {
+      console.warn('Could not read pending sync queue:', e);
+    }
+    pending[key] = { data, queuedAt: new Date().toISOString() };
+    localStorage.setItem(STORAGE_KEYS.PENDING_SYNC, JSON.stringify(pending));
+  },
+
+  async pushToCloud(key, data) {
+    const payload = key === 'config' ? configForCloud(data) : data;
+    const connected = await this.ensureSupabaseConnection();
+    if (!connected) {
+      this.queuePendingSync(key, payload);
+      return false;
+    }
+
+    const ok = await SupabaseManager.pushData(key, payload);
+    if (!ok) this.queuePendingSync(key, payload);
+    return ok;
+  },
+
+  async flushPendingSync() {
+    let pending = {};
+    try {
+      pending = JSON.parse(localStorage.getItem(STORAGE_KEYS.PENDING_SYNC) || '{}');
+    } catch (e) {
+      console.warn('Could not parse pending sync queue:', e);
+      return false;
+    }
+
+    const entries = Object.entries(pending);
+    if (!entries.length) return true;
+
+    for (const [key, item] of entries) {
+      const ok = await SupabaseManager.pushData(key, item.data);
+      if (ok) {
+        applyCloudRecord(key, item.data, false);
+        delete pending[key];
+      }
+    }
+
+    localStorage.setItem(STORAGE_KEYS.PENDING_SYNC, JSON.stringify(pending));
+    return Object.keys(pending).length === 0;
   },
 
   // Config
@@ -89,10 +240,10 @@ export const Store = {
       return { ...DEFAULT_CONFIG };
     }
   },
-  saveConfig(config) {
+  async saveConfig(config) {
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(config));
-    SupabaseManager.pushData('config', config);
     window.dispatchEvent(new CustomEvent('joulane:configUpdated', { detail: config }));
+    return this.pushToCloud('config', config);
   },
 
   // Passcode
@@ -121,7 +272,7 @@ export const Store = {
   },
   saveCategories(categories) {
     localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
-    SupabaseManager.pushData('categories', categories);
+    this.pushToCloud('categories', categories);
     window.dispatchEvent(new CustomEvent('joulane:categoriesUpdated', { detail: categories }));
   },
   addCategory(category) {
@@ -159,7 +310,7 @@ export const Store = {
   saveProducts(products) {
     localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
     localStorage.setItem(STORAGE_KEYS.PRODUCTS_VERSION, PRODUCT_CATALOG_VERSION);
-    SupabaseManager.pushData('products', products);
+    this.pushToCloud('products', products);
     window.dispatchEvent(new CustomEvent('joulane:productsUpdated', { detail: products }));
   },
   addProduct(newProduct) {
@@ -268,7 +419,7 @@ export const Store = {
   },
   saveOrders(orders) {
     localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
-    SupabaseManager.pushData('orders', orders);
+    this.pushToCloud('orders', orders);
     window.dispatchEvent(new CustomEvent('joulane:ordersUpdated', { detail: orders }));
   },
   addOrder(order) {
@@ -314,7 +465,7 @@ export const Store = {
   },
   saveShippingRates(ratesMap) {
     localStorage.setItem(STORAGE_KEYS.SHIPPING, JSON.stringify(ratesMap));
-    SupabaseManager.pushData('shipping', ratesMap);
+    this.pushToCloud('shipping', ratesMap);
     window.dispatchEvent(new CustomEvent('joulane:shippingUpdated', { detail: ratesMap }));
   },
 
@@ -330,7 +481,7 @@ export const Store = {
   },
   saveStockLogs(logs) {
     localStorage.setItem(STORAGE_KEYS.STOCK_LOGS, JSON.stringify(logs));
-    SupabaseManager.pushData('stock_logs', logs);
+    this.pushToCloud('stock_logs', logs);
     window.dispatchEvent(new CustomEvent('joulane:stockLogsUpdated', { detail: logs }));
   },
   addStockLog(entry) {
@@ -385,7 +536,7 @@ export const Store = {
   },
   saveUsers(users) {
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-    SupabaseManager.pushData('users', users);
+    this.pushToCloud('users', users);
     window.dispatchEvent(new CustomEvent('joulane:usersUpdated', { detail: users }));
   },
   addUser(user) {
@@ -444,7 +595,7 @@ export const Store = {
       if (matched) return matched;
       
       // Check if super admin login via username
-      if ((userTrimmed === 'usr_super_admin' || userTrimmed === 'المدير العام') && (passTrimmed === globalPass || passTrimmed === '1234')) {
+      if ((userTrimmed === 'usr_super_admin' || userTrimmed === 'المدير العام') && passTrimmed === globalPass) {
         return users.find(u => u.id === 'usr_super_admin') || {
           id: 'usr_super_admin',
           name: 'المدير العام',
@@ -462,7 +613,7 @@ export const Store = {
     const matchedByPass = users.find(u => (u.passcode || '').trim() === passTrimmed);
     if (matchedByPass) return matchedByPass;
 
-    if (passTrimmed === globalPass || passTrimmed === '1234') {
+    if (passTrimmed === globalPass) {
       return users.find(u => u.id === 'usr_super_admin') || {
         id: 'usr_super_admin',
         name: 'المدير العام',
@@ -513,6 +664,7 @@ export const Store = {
     localStorage.removeItem(STORAGE_KEYS.PASSCODE);
     localStorage.removeItem(STORAGE_KEYS.CART);
     localStorage.removeItem(STORAGE_KEYS.CATEGORIES);
+    localStorage.removeItem(STORAGE_KEYS.PENDING_SYNC);
     this.saveProducts(PRODUCTS);
     this.saveConfig(DEFAULT_CONFIG);
   }

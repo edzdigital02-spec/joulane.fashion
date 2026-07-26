@@ -1,0 +1,8 @@
+{
+  "appId": "com.joulane.stock",
+  "appName": "Joulane Stock",
+  "webDir": "dist",
+  "server": {
+    "appStartPath": "/stock.html"
+  }
+}

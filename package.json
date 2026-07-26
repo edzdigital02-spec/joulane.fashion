@@ -6,12 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "android:prepare": "npm run build && cap sync android && node scripts/prepare-android-assets.mjs",
+    "android:release": "npm run android:prepare && cd android && gradlew.bat assembleCustomerRelease assembleAdminRelease assembleStockRelease && cd .. && node scripts/collect-android-artifacts.mjs",
+    "android:bundle": "npm run android:prepare && cd android && gradlew.bat bundleCustomerRelease bundleAdminRelease bundleStockRelease"
   },
   "devDependencies": {
     "vite": "^8.1.1"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/cli": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
     "@supabase/supabase-js": "^2.110.8"
   }
 }

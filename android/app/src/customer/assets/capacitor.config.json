@@ -1,0 +1,8 @@
+{
+  "appId": "com.joulane.customer",
+  "appName": "Joulane Customer",
+  "webDir": "dist",
+  "server": {
+    "appStartPath": "/index.html"
+  }
+}

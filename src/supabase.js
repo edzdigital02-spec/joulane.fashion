@@ -2,20 +2,40 @@ import { createClient } from '@supabase/supabase-js';
 
 let supabaseClient = null;
 let realtimeChannel = null;
+let currentUrl = '';
+let currentKey = '';
 
 export const SupabaseManager = {
   client: null,
 
+  isConnectedTo(url, key) {
+    return !!supabaseClient && currentUrl === url && currentKey === key;
+  },
+
   init(url, key, onSyncCallback) {
     if (!url || !key) {
+      if (supabaseClient && realtimeChannel) {
+        supabaseClient.removeChannel(realtimeChannel);
+      }
       supabaseClient = null;
+      realtimeChannel = null;
+      currentUrl = '';
+      currentKey = '';
+      this.client = null;
       return null;
     }
 
     try {
+      if (supabaseClient && realtimeChannel) {
+        supabaseClient.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+      }
+
       supabaseClient = createClient(url, key, {
         auth: { persistSession: false }
       });
+      currentUrl = url;
+      currentKey = key;
       this.client = supabaseClient;
       
       // Subscribe to Realtime changes on 'joulane_store' table
@@ -77,6 +97,7 @@ export const SupabaseManager = {
 
     if (realtimeChannel) {
       supabaseClient.removeChannel(realtimeChannel);
+      realtimeChannel = null;
     }
 
     realtimeChannel = supabaseClient
