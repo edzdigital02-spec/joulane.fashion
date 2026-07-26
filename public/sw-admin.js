@@ -1,4 +1,4 @@
-const CACHE_NAME = 'joulane-admin-pwa-v1';
+const CACHE_NAME = 'joulane-admin-pwa-v2';
 const ASSETS = [
   '/admin.html',
   '/manifest-admin.json',

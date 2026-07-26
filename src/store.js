@@ -122,7 +122,7 @@ export const Store = {
 
       Object.entries(CLOUD_RECORDS).forEach(([key]) => {
         if (Object.prototype.hasOwnProperty.call(remoteData, key)) {
-          applyCloudRecord(key, remoteData[key], false);
+          applyCloudRecord(key, remoteData[key]);
         }
       });
 
@@ -563,8 +563,12 @@ export const Store = {
   saveUsers(users) {
     const safeUsers = users.map(user => ({ ...user, passcode: '' }));
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(safeUsers));
-    this.pushToCloud('users', users);
+    this._lastUserSync = this.pushToCloud('users', users);
     window.dispatchEvent(new CustomEvent('joulane:usersUpdated', { detail: safeUsers }));
+    return this._lastUserSync;
+  },
+  waitForUserSync() {
+    return this._lastUserSync || Promise.resolve(true);
   },
   addUser(user) {
     const users = this.getUsers();

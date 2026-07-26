@@ -1,4 +1,4 @@
-const CACHE_NAME = 'joulane-stock-pwa-v1';
+const CACHE_NAME = 'joulane-stock-pwa-v2';
 const ASSETS = [
   '/stock.html',
   '/manifest-stock.json',

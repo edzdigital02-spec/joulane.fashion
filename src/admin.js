@@ -1275,7 +1275,7 @@ function setupUsersTab() {
   }
 
   if (form) {
-    form.onsubmit = (e) => {
+    form.onsubmit = async (e) => {
       e.preventDefault();
       const id = document.getElementById('user-form-id').value;
       const name = document.getElementById('user-name-input').value.trim();
@@ -1295,11 +1295,16 @@ function setupUsersTab() {
 
       if (id) {
         Store.updateUser(id, { name, role, passcode, allowStock, allowAdmin, permissions });
-        window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: `تم تعديل حساب: ${name}` }));
       } else {
         Store.addUser({ name, role, passcode, allowStock, allowAdmin, permissions });
-        window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: `تم إنشاء حساب جديد: ${name}` }));
       }
+
+      const synced = await Store.waitForUserSync();
+      const action = id ? 'تعديل' : 'إنشاء';
+      const message = synced
+        ? `تم ${action} حساب ${name} وحفظه في السحابة.`
+        : `تم ${action} حساب ${name} على الجهاز، وسيعاد رفعه عند عودة الاتصال.`;
+      window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: message }));
 
       formCard.classList.add('hidden');
       renderUsersTab();
@@ -1418,13 +1423,17 @@ function renderUsersTab() {
   });
 
   container.querySelectorAll('.btn-delete-user').forEach(btn => {
-    btn.onclick = (e) => {
+    btn.onclick = async (e) => {
       const id = e.currentTarget.dataset.id;
       const u = Store.getUsers().find(item => item.id === id);
       if (u && confirm(`هل أنت تأكد من حذف حساب: ${u.name}؟`)) {
         Store.deleteUser(id);
         renderUsersTab();
-        window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: 'تم حذف الحساب بنجاح' }));
+        const synced = await Store.waitForUserSync();
+        const message = synced
+          ? 'تم حذف الحساب من السحابة بنجاح.'
+          : 'تم حذف الحساب على الجهاز، وسيعاد رفع التغيير عند عودة الاتصال.';
+        window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: message }));
       }
     };
   });
