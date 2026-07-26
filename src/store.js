@@ -251,7 +251,7 @@ export const Store = {
 
   // Passcode
   getPasscode() {
-    return localStorage.getItem(STORAGE_KEYS.PASSCODE) || this.getConfig().adminPasscode || '1234';
+    return localStorage.getItem(STORAGE_KEYS.PASSCODE) || this.getConfig().adminPasscode || '';
   },
   setPasscode(newPass) {
     localStorage.setItem(STORAGE_KEYS.PASSCODE, newPass);
@@ -581,7 +581,7 @@ export const Store = {
       id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
       name: user.name || 'مسؤول جديد',
       role: user.role || 'مسؤول',
-      passcode: user.passcode || '1234',
+      passcode: (user.passcode || '').trim(),
       allowAdmin: !!user.allowAdmin,
       allowStock: !!user.allowStock,
       permissions: user.permissions || {

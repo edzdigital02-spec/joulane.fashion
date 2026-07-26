@@ -411,7 +411,7 @@ function renderProductsTab() {
     return `
       <div class="admin-product-card">
         <div class="admin-prod-top">
-          <img src="${p.image}" alt="${nameAr}" class="admin-prod-img" onerror="this.src='/images/303-3.PNG';" />
+          <img src="${p.image}" alt="${nameAr}" class="admin-prod-img" loading="lazy" decoding="async" onerror="this.src='/images/303-3.PNG';" />
           <div class="admin-prod-info">
             <h5>${nameAr}</h5>
             <div class="admin-prod-price">${(p.price || 0).toLocaleString()} دج <small style="font-size:0.8rem; font-weight:normal;">/ للزوج</small></div>
@@ -1131,7 +1131,7 @@ function renderInventoryTab() {
     return `
       <tr data-id="${p.id}">
         <td>
-          <img src="${p.image}" alt="${nameAr}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;" onerror="this.src='/images/303-3.PNG';" />
+          <img src="${p.image}" alt="${nameAr}" loading="lazy" decoding="async" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;" onerror="this.src='/images/303-3.PNG';" />
         </td>
         <td>
           <strong>${nameAr}</strong>
@@ -1353,6 +1353,11 @@ function setupUsersTab() {
       const role = document.getElementById('user-role-input').value.trim();
       const passcode = document.getElementById('user-passcode-input').value.trim();
 
+      if (!id && passcode.length < 4) {
+        alert('رمز الدخول للحساب الجديد يجب أن يتكون من 4 أحرف أو أرقام على الأقل.');
+        return;
+      }
+
       const allowStock = document.getElementById('user-perm-allow-stock').checked;
       const allowAdmin = document.getElementById('user-perm-allow-admin').checked;
 
@@ -1397,7 +1402,10 @@ function resetUserForm() {
   document.getElementById('user-form-id').value = '';
   document.getElementById('user-name-input').value = '';
   document.getElementById('user-role-input').value = '';
-  document.getElementById('user-passcode-input').value = '';
+  const passcodeInput = document.getElementById('user-passcode-input');
+  passcodeInput.value = '';
+  passcodeInput.required = true;
+  passcodeInput.placeholder = '4 أحرف أو أرقام على الأقل';
   document.getElementById('user-perm-allow-stock').checked = true;
   document.getElementById('user-perm-allow-admin').checked = false;
   document.getElementById('user-perm-stock-add').checked = true;
@@ -1468,7 +1476,7 @@ function renderUsersTab() {
           <small class="text-muted">${u.role || 'مسؤول'}</small>
         </td>
         <td>
-          <code class="px-2 py-1 bg-dark rounded border border-secondary text-warning fw-bold">${u.passcode}</code>
+          <span class="badge bg-success"><i class="fa-solid fa-shield-halved"></i> محفوظ بشكل مشفر</span>
         </td>
         <td>${allowStockBadge} ${allowAdminBadge}</td>
         <td>${opsBadges || '<span class="text-muted">قياسية</span>'}</td>
@@ -1495,7 +1503,10 @@ function renderUsersTab() {
         document.getElementById('user-form-id').value = u.id;
         document.getElementById('user-name-input').value = u.name;
         document.getElementById('user-role-input').value = u.role;
-        document.getElementById('user-passcode-input').value = u.passcode;
+        const passcodeInput = document.getElementById('user-passcode-input');
+        passcodeInput.value = '';
+        passcodeInput.required = false;
+        passcodeInput.placeholder = 'اتركه فارغاً للإبقاء على الرمز الحالي';
         document.getElementById('user-perm-allow-stock').checked = !!u.allowStock;
         document.getElementById('user-perm-allow-admin').checked = !!u.allowAdmin;
 

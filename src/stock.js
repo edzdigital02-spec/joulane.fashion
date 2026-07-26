@@ -324,7 +324,7 @@ export function initStockPanel(refreshMainStoreFn) {
       html += `
         <div class="stock-card ${status}" data-id="${p.id}">
           <div class="stock-card-header">
-            <img src="${imgUrl}" onerror="this.onerror=null; this.src='/images/${rawFileName}';" alt="${p.name?.ar || ''}" class="stock-card-img" />
+            <img src="${imgUrl}" onerror="this.onerror=null; this.src='/images/${rawFileName}';" alt="${p.name?.ar || ''}" class="stock-card-img" loading="lazy" decoding="async" />
             <div class="stock-card-info">
               <span class="stock-model-tag">كود: ${modelCode}</span>
               <h5 class="stock-card-title">${p.name?.ar || p.name || 'منتج'}</h5>
@@ -700,7 +700,7 @@ export function initStockPanel(refreshMainStoreFn) {
       html += `
         <div class="stock-log-card">
           <div class="log-main-info">
-            <img src="${log.productImg || '/images/303-3.PNG'}" onerror="this.onerror=null; this.src='/images/303-3.PNG';" class="log-img" />
+            <img src="${log.productImg || '/images/303-3.PNG'}" onerror="this.onerror=null; this.src='/images/303-3.PNG';" alt="${log.productName || 'منتج'}" class="log-img" loading="lazy" decoding="async" />
             <div class="log-details">
               <span class="log-title">${log.productName || 'منتج'}</span>
               <div class="log-meta">

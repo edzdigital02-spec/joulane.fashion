@@ -2,8 +2,8 @@ apply plugin: 'com.android.application'
 
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('keystore.properties')
-def joulaneVersionCode = Integer.parseInt(System.getenv('JOULANE_VERSION_CODE') ?: '4')
-def joulaneVersionName = System.getenv('JOULANE_VERSION_NAME') ?: '1.2.1'
+def joulaneVersionCode = Integer.parseInt(System.getenv('JOULANE_VERSION_CODE') ?: '5')
+def joulaneVersionName = System.getenv('JOULANE_VERSION_NAME') ?: '1.3.0'
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }

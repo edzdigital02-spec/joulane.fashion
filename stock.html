@@ -3,14 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JOULANE Fashion | بيع أحذية نسائية بالجملة</title>
-  <meta name="description" content="Joulane Fashion - بيع أحذية نسائية بالجملة يد أولى، جودة عالية، أسعار تنافسية، وتوصيل لجميع الولايات." />
+  <title>لوحة مخزن Joulane Fashion</title>
+  <meta name="description" content="لوحة مخزن Joulane Fashion المحمية لإدارة الكميات وحركات المخزون." />
+  <meta name="robots" content="noindex, nofollow, noarchive" />
   <meta name="theme-color" content="#c99332" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Joulane Fashion" />
   <link rel="manifest" href="/manifest-stock.json" />
+  <link rel="icon" href="/images/icon-192.png" type="image/png" />
   <script>
     document.documentElement.dataset.theme = localStorage.getItem('joulane_theme') || 'dark';
   </script>
@@ -38,16 +40,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <script>
-    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
-    (window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
-    window.META_PIXEL_ID = "JOULANE_PIXEL";
-    fbq('init', window.META_PIXEL_ID);
-    fbq('track', 'PageView');
-  </script>
 </head>
 <body>
   <div id="app">
@@ -64,22 +56,22 @@
     <header class="main-header">
       <div class="container header-content">
         <a class="logo-box" href="#catalog" aria-label="JOULANE Fashion">
-          <img src="/images/logo.png" alt="JOULANE Fashion" class="brand-logo" />
+          <img src="/images/logo.png" alt="JOULANE Fashion" class="brand-logo" decoding="async" />
           <span>
             <strong class="brand-title">JOULANE</strong>
             <small class="brand-sub" data-i18n="brandSub">Fashion - أحذية نسائية بالجملة</small>
           </span>
         </a>
         <div class="header-actions">
-          <button id="lang-toggle" class="btn btn-outline-gold icon-btn-mobile" type="button" title="Changer la langue">
+          <button id="lang-toggle" class="btn btn-outline-gold icon-btn-mobile" type="button" title="Changer la langue" aria-label="تغيير اللغة">
             <i class="fa-solid fa-language"></i>
             <span class="btn-text-desktop" data-i18n="langButton">Français</span>
           </button>
-          <button id="theme-toggle" class="btn btn-outline-gold icon-btn icon-btn-mobile" type="button" title="الوضع الداكن / الفاتح">
+          <button id="theme-toggle" class="btn btn-outline-gold icon-btn icon-btn-mobile" type="button" title="الوضع الداكن / الفاتح" aria-label="تغيير مظهر الموقع">
             <i class="fa-solid fa-moon"></i>
             <span class="btn-text-desktop" data-i18n="themeButton">الوضع الداكن</span>
           </button>
-          <button id="header-cart-btn" class="btn btn-gold">
+          <button id="header-cart-btn" class="btn btn-gold" aria-label="فتح سلة التسوق">
             <i class="fa-solid fa-cart-shopping"></i>
             <span class="btn-text-desktop" data-i18n="cartTitle">سلة التسوق</span>
             <span id="header-cart-badge" class="badge-count">0</span>
@@ -90,7 +82,7 @@
 
     <section class="cover-strip">
       <div class="container">
-        <img src="/images/joulane-cover.png" alt="JOULANE Fashion cover" class="brand-cover-img" />
+        <img src="/images/joulane-cover.png" alt="واجهة Joulane Fashion للأحذية النسائية" class="brand-cover-img" decoding="async" />
       </div>
     </section>
 
@@ -111,7 +103,7 @@
           </div>
         </div>
         <div class="hero-media">
-          <img src="/images/303-3.PNG" alt="أحذية JOULANE" class="hero-img" />
+          <img src="/images/303-3.PNG" alt="أحذية JOULANE" class="hero-img" decoding="async" fetchpriority="high" />
           <div class="floating-badge">
             <strong>36-41</strong>
             <span data-i18n="seriesSizes">كرطون كامل</span>
@@ -139,7 +131,7 @@
         <div class="catalog-search-wrap">
           <div class="search-input-box">
             <i class="fa-solid fa-magnifying-glass search-icon"></i>
-            <input type="text" id="catalog-search-input" class="search-input" placeholder="ابحث باسم الموديل أو الكود (مثال: 303-3)..." />
+            <input type="search" id="catalog-search-input" class="search-input" aria-label="البحث في كتالوج المنتجات" placeholder="ابحث باسم الموديل أو الكود (مثال: 303-3)..." autocomplete="off" />
             <button type="button" id="clear-catalog-search" class="clear-search-btn hidden" aria-label="مسح البحث">&times;</button>
           </div>
         </div>
@@ -355,7 +347,7 @@
               </div>
               <div class="form-group mb-3">
                 <label style="font-size: 0.85rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block; text-align: right;">كلمة المرور / PIN:</label>
-                <input type="password" id="admin-pass-input" class="form-control text-center" placeholder="كلمة المرور (الافتراضية: 1234)" autocomplete="current-password" required />
+                <input type="password" id="admin-pass-input" class="form-control text-center" placeholder="أدخل رمز الدخول الخاص بك" autocomplete="current-password" minlength="4" required />
               </div>
               <button type="submit" id="admin-pass-submit" class="btn btn-gold btn-block btn-lg" style="font-weight: 800;">
                 <i class="fa-solid fa-lock-open"></i> تسجيل الدخول للوحة التحكم
@@ -910,7 +902,7 @@
             <div class="admin-tab-pane" id="tab-shipping">
               <div class="admin-pane-header">
                 <div>
-                  <h4><i class="fa-solid fa-truck-fast"></i> إدارة أسعار التوصيل لـ 58 ولاية</h4>
+                  <h4><i class="fa-solid fa-truck-fast"></i> إدارة أسعار التوصيل لجميع الولايات</h4>
                   <p class="text-muted">عدّل تكلفة التوصيل للمنزل وللمكتب لكل ولاية بشكل مخصص</p>
                 </div>
                 <button id="save-shipping-btn" class="btn btn-gold"><i class="fa-solid fa-floppy-disk"></i> حفظ أسعار التوصيل</button>
@@ -1039,7 +1031,7 @@
                       </div>
                       <div>
                         <label style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block;">رمز الدخول الخاص (Passcode/PIN):</label>
-                        <input type="text" id="user-passcode-input" class="form-control text-center" placeholder="مثال: 4321" required style="letter-spacing: 2px; font-weight: 800;" />
+                        <input type="password" id="user-passcode-input" class="form-control text-center" placeholder="4 أحرف أو أرقام على الأقل" autocomplete="new-password" minlength="4" required style="letter-spacing: 2px; font-weight: 800;" />
                       </div>
                     </div>
 
@@ -1259,7 +1251,7 @@
           <button id="stock-logout-btn" class="btn btn-outline-danger btn-sm">
             <i class="fa-solid fa-right-from-bracket"></i> قفل اللوحة
           </button>
-          <button id="close-stock-modal" class="btn-close-modal">
+          <button id="close-stock-modal" class="btn-close-modal" aria-label="إغلاق لوحة المخزن">
             <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
@@ -1280,7 +1272,7 @@
             </div>
             <div class="form-group mb-3">
               <label style="font-size: 0.85rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block; text-align: right;">رمز الدخول الخاص (PIN):</label>
-              <input type="password" id="stock-pass-input" class="form-control text-center" placeholder="رمز الدخول (1234)" required />
+              <input type="password" id="stock-pass-input" class="form-control text-center" placeholder="أدخل رمز الدخول الخاص بك" autocomplete="current-password" minlength="4" required />
             </div>
             <button type="submit" class="btn btn-gold btn-block btn-lg" style="font-weight: 800;">
               <i class="fa-solid fa-key"></i> فتح لوحة المخزن

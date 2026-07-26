@@ -1,8 +1,8 @@
 {
-  "id": "/admin",
+  "id": "/admin.html",
   "short_name": "Admin Joulane",
-  "name": "Joulane Fashion Admin Panel",
-  "description": "تطبيق لوحة التحكم الكترونية الإدارة لمتجر الجولان فاشن",
+  "name": "لوحة إدارة Joulane Fashion",
+  "description": "تطبيق الإدارة المحمي لإدارة منتجات وطلبات وإعدادات متجر Joulane Fashion.",
   "lang": "ar-DZ",
   "dir": "rtl",
   "categories": ["business", "shopping"],
@@ -14,7 +14,7 @@
       "purpose": "any"
     },
     {
-      "src": "/images/icon-192.png",
+      "src": "/images/icon-maskable-192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "maskable"
@@ -26,7 +26,7 @@
       "purpose": "any"
     },
     {
-      "src": "/images/icon-512.png",
+      "src": "/images/icon-maskable-512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "maskable"

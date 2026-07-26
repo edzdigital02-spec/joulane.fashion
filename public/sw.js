@@ -1,4 +1,4 @@
-const CACHE_NAME = 'joulane-pwa-v3';
+const CACHE_NAME = 'joulane-pwa-v4';
 const ASSETS = [
   '/',
   '/stock.html',
@@ -7,6 +7,11 @@ const ASSETS = [
   '/manifest-stock.json',
   '/manifest-admin.json',
   '/images/logo.png',
+  '/images/icon-192.png',
+  '/images/icon-512.png',
+  '/images/icon-maskable-192.png',
+  '/images/icon-maskable-512.png',
+  '/images/joulane-cover.png',
   '/images/303-3.PNG'
 ];
 

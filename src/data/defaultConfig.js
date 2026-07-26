@@ -54,7 +54,7 @@ export const DEFAULT_CONFIG = {
   footerText_ar: "بيع أحذية نسائية بالجملة يد أولى، جودة عالية، أسعار تنافسية، وتوصيل لجميع الولايات.",
   footerText_fr: "Vente de chaussures femme en gros, premiere main, haute qualite, prix competitifs et livraison dans toutes les wilayas.",
   
-  adminPasscode: "1234",
+  adminPasscode: "",
   stealthMode: false,
   hideAllPrices: false,
 

@@ -1,8 +1,8 @@
 {
-  "id": "/stock",
+  "id": "/stock.html",
   "short_name": "Stock Joulane",
-  "name": "Joulane Fashion Stock Panel",
-  "description": "تطبيق إدارة المخزن لمتجر الجولان فاشن للحلابات والملابس",
+  "name": "لوحة مخزن Joulane Fashion",
+  "description": "تطبيق المخزن المحمي لإدارة كميات وحركات مخزون أحذية Joulane Fashion.",
   "lang": "ar-DZ",
   "dir": "rtl",
   "categories": ["business", "shopping"],
@@ -14,7 +14,7 @@
       "purpose": "any"
     },
     {
-      "src": "/images/icon-192.png",
+      "src": "/images/icon-maskable-192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "maskable"
@@ -26,7 +26,7 @@
       "purpose": "any"
     },
     {
-      "src": "/images/icon-512.png",
+      "src": "/images/icon-maskable-512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "maskable"

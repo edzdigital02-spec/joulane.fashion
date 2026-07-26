@@ -49,7 +49,7 @@ const I18N = {
     footerText: "بيع أحذية نسائية بالجملة يد أولى، جودة عالية، أسعار تنافسية، وتوصيل لجميع الولايات.",
     footerDelivery: "توصيل للمنزل أو المكتب",
     stickyTitle: "سلة التسوق",
-    stickySub: "توصيل 58 ولاية",
+    stickySub: "توصيل لجميع الولايات",
     orderShort: "عرض السلة",
     checkoutTitle: "تأكيد طلب السلة الموحد",
     checkoutText: "املأ بياناتك وسنحضر رسالة واتساب مفصلة بجميع المنتجات المطلوبة.",
@@ -77,6 +77,7 @@ const I18N = {
     sendWhatsapp: "إرسال الطلب عبر واتساب",
     backCatalog: "العودة للكتالوج",
     oneSeries: "1 كرطون = {pairs} أزواج",
+    ordersCount: "{count} طلب",
     seriesPrice: "{price} / للكرطون",
     seriesSizesLine: "1 كرطون = {pairs} أزواج، المقاسات من 36 إلى 41",
     viewDetails: "عرض التفاصيل",
@@ -133,7 +134,7 @@ const I18N = {
     footerText: "Vente de chaussures femme en gros, premiere main, haute qualite, prix competitifs et livraison dans toutes les wilayas.",
     footerDelivery: "Livraison domicile ou bureau",
     stickyTitle: "Mon Panier",
-    stickySub: "Livraison 58 Wilayas",
+    stickySub: "Livraison dans toutes les wilayas",
     orderShort: "Voir Panier",
     checkoutTitle: "Confirmer la commande groupee",
     checkoutText: "Remplissez vos informations pour envoyer la commande globale sur WhatsApp.",
@@ -161,6 +162,7 @@ const I18N = {
     sendWhatsapp: "Envoyer sur WhatsApp",
     backCatalog: "Retour au catalogue",
     oneSeries: "1 serie = {pairs} paires",
+    ordersCount: "{count} commandes",
     seriesPrice: "{price} / serie",
     seriesSizesLine: "1 serie = {pairs} paires, tailles 36 a 41",
     viewDetails: "Voir details",
@@ -251,10 +253,16 @@ function template(key, values = {}) {
   return t(key).replace(/\{(\w+)\}/g, (_, token) => values[token] ?? '');
 }
 
+function normalizeDeliveryCopy(value) {
+  return String(value || '')
+    .replace(/توصيل\s+58\s+ولاية/g, 'توصيل لجميع الولايات')
+    .replace(/Livraison\s+58\s+wilayas/gi, 'Livraison dans toutes les wilayas');
+}
+
 function productText(product, field) {
   const value = product[field];
   if (!value) return '';
-  return typeof value === 'object' ? (value[currentLang] || value.ar || '') : value;
+  return normalizeDeliveryCopy(typeof value === 'object' ? (value[currentLang] || value.ar || '') : value);
 }
 
 function productImageUrl(product) {
@@ -481,7 +489,7 @@ function initCatalog(category = 'all', searchQuery = '') {
     card.className = `product-card ${isOutOfStock ? 'out-of-stock-card' : ''}`;
     card.innerHTML = `
       <div class="product-image-box">
-        <img src="${productImageUrl(product)}" alt="${productText(product, 'name')}" class="product-img" onerror="this.onerror=null; this.src='${product.image || '/images/303-3.PNG'}';" />
+        <img src="${productImageUrl(product)}" alt="${productText(product, 'name')}" class="product-img" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='${product.image || '/images/303-3.PNG'}';" />
         <span class="discount-badge">${productText(product, 'discountBadge')}</span>
         <span class="stock-badge">
           <i class="fa-solid fa-box"></i> 
@@ -505,10 +513,10 @@ function initCatalog(category = 'all', searchQuery = '') {
         </div>
         <p class="product-description">${productText(product, 'description')}</p>
         <div class="product-actions">
-          <button class="btn btn-gold add-to-cart-btn" data-id="${product.id}" ${isOutOfStock ? 'disabled style="opacity:0.6; cursor:not-allowed;"' : ''}>
+          <button class="btn btn-gold add-to-cart-btn" data-id="${product.id}" aria-label="${isOutOfStock ? (currentLang === 'ar' ? 'المنتج غير متوفر' : 'Produit indisponible') : `${t('addToCart')}: ${productText(product, 'name')}`}" ${isOutOfStock ? 'disabled style="opacity:0.6; cursor:not-allowed;"' : ''}>
             <i class="fa-solid fa-cart-plus"></i> ${isOutOfStock ? (currentLang === 'ar' ? 'غير متوفر' : 'Épuisé') : t('addToCart')}
           </button>
-          <button class="btn btn-outline-white view-details-btn" data-id="${product.id}" title="${t('viewDetails')}">
+          <button class="btn btn-outline-white view-details-btn" data-id="${product.id}" title="${t('viewDetails')}" aria-label="${t('viewDetails')}: ${productText(product, 'name')}">
             <i class="fa-solid fa-eye"></i>
           </button>
         </div>
@@ -610,7 +618,7 @@ function renderCartModalItems() {
 
     return `
       <div class="cart-item-card">
-        <img src="${productImageUrl(item.image)}" alt="${currentLang === 'ar' ? item.nameAr : item.nameFr}" class="cart-item-img" onerror="this.onerror=null; this.src='${item.image || '/images/303-3.PNG'}';" />
+        <img src="${productImageUrl(item.image)}" alt="${currentLang === 'ar' ? item.nameAr : item.nameFr}" class="cart-item-img" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='${item.image || '/images/303-3.PNG'}';" />
         <div class="cart-item-details">
           <h4>${currentLang === 'ar' ? item.nameAr : item.nameFr}</h4>
           <div class="cart-item-meta">
@@ -700,7 +708,7 @@ function openCheckoutFromCart() {
       <h4><i class="fa-solid fa-boxes-packing"></i> المنتجات المطلوبة بالسلة (${cart.length}):</h4>
       ${cart.map(item => `
         <div class="checkout-cart-item-row">
-          <img src="${productImageUrl(item.image)}" class="checkout-item-thumb" onerror="this.onerror=null; this.src='${item.image || '/images/303-3.PNG'}';" />
+          <img src="${productImageUrl(item.image)}" alt="${currentLang === 'ar' ? item.nameAr : item.nameFr}" class="checkout-item-thumb" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='${item.image || '/images/303-3.PNG'}';" />
           <div>
             <strong>${currentLang === 'ar' ? item.nameAr : item.nameFr}</strong>
             <div class="text-muted" style="font-size:0.85rem;">اللون: ${item.color} | الكمية: ${item.seriesQty} كرطون (${item.seriesQty * item.pairsPerSeries} زوج)</div>
@@ -873,11 +881,13 @@ function openProductModal(productId) {
 
   const content = document.getElementById('product-modal-content');
   const colors = product.colors ? (product.colors[currentLang] || product.colors.ar || []) : [];
-  const features = product.features ? (product.features[currentLang] || product.features.ar || []) : [];
+  const features = product.features
+    ? (product.features[currentLang] || product.features.ar || []).map(normalizeDeliveryCopy)
+    : [];
 
   content.innerHTML = `
     <div class="product-modal-media">
-      <img src="${productImageUrl(product)}" alt="${productText(product, 'name')}" class="modal-product-img" onerror="this.onerror=null; this.src='${product.image || '/images/303-3.PNG'}';" />
+      <img src="${productImageUrl(product)}" alt="${productText(product, 'name')}" class="modal-product-img" decoding="async" onerror="this.onerror=null; this.src='${product.image || '/images/303-3.PNG'}';" />
     </div>
     <div class="product-modal-info">
       <span class="product-cat">${categoryLabel(product.category)}</span>

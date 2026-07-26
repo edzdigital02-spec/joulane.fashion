@@ -1,8 +1,8 @@
 {
   "id": "/",
   "short_name": "Joulane Fashion",
-  "name": "متجر الجولان فاشن للألبسة والحلابات العصريّة",
-  "description": "المتجر الجزائري الأول المتخصص في أفضل وأرقى الموديلات للألبسة النسائية والحلابات بأفضل الأسعار.",
+  "name": "Joulane Fashion للأحذية النسائية بالجملة",
+  "description": "متجر Joulane Fashion للأحذية النسائية بالجملة، مخصص للتجار والمحلات مع توصيل لجميع الولايات.",
   "lang": "ar-DZ",
   "dir": "rtl",
   "categories": ["shopping", "fashion", "business"],
@@ -14,7 +14,7 @@
       "purpose": "any"
     },
     {
-      "src": "/images/icon-192.png",
+      "src": "/images/icon-maskable-192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "maskable"
@@ -26,7 +26,7 @@
       "purpose": "any"
     },
     {
-      "src": "/images/icon-512.png",
+      "src": "/images/icon-maskable-512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "maskable"
