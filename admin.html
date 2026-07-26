@@ -12,9 +12,21 @@
   <meta name="apple-mobile-web-app-title" content="Joulane Fashion" />
   <link rel="manifest" href="/manifest-admin.json" />
   <script>
+    document.documentElement.dataset.theme = localStorage.getItem('joulane_theme') || 'dark';
+  </script>
+  <link rel="stylesheet" href="/src/styles/style.css" />
+  <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw-admin.js', { scope: '/' }).catch(err => console.log('SW reg error:', err));
+      window.addEventListener('load', async () => {
+        try {
+          const current = await navigator.serviceWorker.getRegistration('/');
+          if (current?.active && !current.active.scriptURL.endsWith('/sw.js')) {
+            await current.unregister();
+          }
+          await navigator.serviceWorker.register('/sw.js');
+        } catch (err) {
+          console.log('SW reg error:', err);
+        }
       });
     }
     if (window.location.hash !== '#admin') {
@@ -364,13 +376,28 @@
               </div>
             </div>
             <div class="admin-actions">
-              <button id="admin-install-apk-btn" class="btn btn-gold btn-sm" title="تثبيت التطبيق"><i class="fa-solid fa-download"></i> تثبيت التطبيق</button>
-              <a href="#stock" id="open-stock-direct-btn" class="btn btn-gold btn-sm"><i class="fa-solid fa-boxes-stacked"></i> لوحة المخزن المباشرة (#stock)</a>
+              <button id="admin-install-apk-btn" class="btn btn-gold btn-sm" title="تثبيت التطبيق"><i class="fa-solid fa-download"></i> <span>تثبيت</span><span class="admin-action-extra"> التطبيق</span></button>
+              <a href="#stock" id="open-stock-direct-btn" class="btn btn-gold btn-sm" title="فتح لوحة المخزن"><i class="fa-solid fa-boxes-stacked"></i> <span>المخزن</span><span class="admin-action-extra"> المباشر</span></a>
               <button id="admin-logout-btn" class="btn btn-outline-gold btn-sm"><i class="fa-solid fa-right-from-bracket"></i> خروج</button>
             </div>
           </div>
 
           <!-- Admin Tabs Bar -->
+          <label class="admin-mobile-nav" for="admin-mobile-tab-select">
+            <i class="fa-solid fa-compass"></i>
+            <span>قسم الإدارة</span>
+            <select id="admin-mobile-tab-select" class="form-control select-dark">
+              <option value="overview">الإحصائيات</option>
+              <option value="products">المنتجات</option>
+              <option value="inventory">المخزون</option>
+              <option value="categories">إدارة الأقسام</option>
+              <option value="cms">الواجهة الرئيسية</option>
+              <option value="orders">الطلبات</option>
+              <option value="shipping">التوصيل والولايات</option>
+              <option value="users">طاقم العمل</option>
+              <option value="settings">الإعدادات والأمان</option>
+            </select>
+          </label>
           <div class="admin-tabs-bar">
             <button class="admin-tab-btn active" data-tab="overview"><i class="fa-solid fa-chart-pie"></i> الإحصائيات</button>
             <button class="admin-tab-btn" data-tab="products"><i class="fa-solid fa-boxes-stacked"></i> المنتجات</button>

@@ -3,6 +3,29 @@ import { WILAYAS } from './data/wilayas.js';
 
 let isAdminLoggedIn = false;
 
+function enhanceAdminTables(root) {
+  if (!root) return;
+
+  root.querySelectorAll('table').forEach(table => {
+    const headers = Array.from(table.querySelectorAll('thead th'))
+      .map(header => header.textContent.trim());
+
+    if (!headers.length) return;
+
+    table.classList.add('admin-mobile-card-table');
+    table.querySelectorAll('tbody tr').forEach(row => {
+      const cells = Array.from(row.children).filter(cell => cell.tagName === 'TD');
+      cells.forEach((cell, index) => {
+        if (cell.colSpan > 1) {
+          cell.classList.add('admin-table-empty-cell');
+          return;
+        }
+        cell.dataset.label = headers[index] || '';
+      });
+    });
+  });
+}
+
 export async function uploadToCloudinary(file) {
   const CLOUD_NAME = 'envkmzcu';
   try {
@@ -40,6 +63,13 @@ export function initAdmin(refreshMainStoreFn) {
   const closeAdminBtn = document.getElementById('close-admin-modal');
   const logoutBtn = document.getElementById('admin-logout-btn');
   const installApkBtn = document.getElementById('admin-install-apk-btn');
+  const mobileTabSelect = document.getElementById('admin-mobile-tab-select');
+
+  const tableObserver = new MutationObserver(() => {
+    window.requestAnimationFrame(() => enhanceAdminTables(adminModal));
+  });
+  tableObserver.observe(adminModal, { childList: true, subtree: true });
+  enhanceAdminTables(adminModal);
 
   // URL Hash Check (#admin)
   if (window.location.hash === '#admin') {
@@ -131,12 +161,18 @@ export function initAdmin(refreshMainStoreFn) {
     
     const usersTabBtn = document.querySelector('.admin-tab-btn[data-tab="users"]');
     if (usersTabBtn) {
-      usersTabBtn.style.display = (p.adminUsers === false) ? 'none' : '';
+      const isHidden = p.adminUsers === false;
+      usersTabBtn.style.display = isHidden ? 'none' : '';
+      const usersOption = mobileTabSelect?.querySelector('option[value="users"]');
+      if (usersOption) usersOption.hidden = isHidden;
     }
 
     const ordersTabBtn = document.querySelector('.admin-tab-btn[data-tab="orders"]');
     if (ordersTabBtn) {
-      ordersTabBtn.style.display = (p.adminOrders === false) ? 'none' : '';
+      const isHidden = p.adminOrders === false;
+      ordersTabBtn.style.display = isHidden ? 'none' : '';
+      const ordersOption = mobileTabSelect?.querySelector('option[value="orders"]');
+      if (ordersOption) ordersOption.hidden = isHidden;
     }
   }
 
@@ -194,6 +230,7 @@ export function initAdmin(refreshMainStoreFn) {
       
       btn.classList.add('active');
       const tabTarget = btn.dataset.tab;
+      if (mobileTabSelect) mobileTabSelect.value = tabTarget;
       const targetPane = document.getElementById(`tab-${tabTarget}`);
       if (targetPane) targetPane.classList.add('active');
 
@@ -206,6 +243,11 @@ export function initAdmin(refreshMainStoreFn) {
       if (tabTarget === 'shipping') renderShippingTab();
       if (tabTarget === 'users') renderUsersTab();
     });
+  });
+
+  mobileTabSelect?.addEventListener('change', () => {
+    const targetButton = document.querySelector(`.admin-tab-btn[data-tab="${mobileTabSelect.value}"]`);
+    if (targetButton && targetButton.style.display !== 'none') targetButton.click();
   });
 
   // Quick Action Buttons

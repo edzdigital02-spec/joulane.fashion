@@ -1,4 +1,3 @@
-import './styles/style.css';
 import { Store } from './store.js';
 
 import { initAdmin } from './admin.js';
