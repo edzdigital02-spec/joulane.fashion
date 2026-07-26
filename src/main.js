@@ -199,11 +199,10 @@ document.addEventListener('DOMContentLoaded', () => {
   renderApp();
   initEventListeners();
 
-  const nativeSurface = Capacitor.isNativePlatform()
-    ? (window.location.pathname.endsWith('/admin.html')
-      ? 'admin'
-      : window.location.pathname.endsWith('/stock.html') ? 'stock' : 'customer')
-    : 'web';
+  const pageSurface = window.location.pathname.endsWith('/admin.html')
+    ? 'admin'
+    : window.location.pathname.endsWith('/stock.html') ? 'stock' : 'customer';
+  const nativeSurface = Capacitor.isNativePlatform() ? pageSurface : 'web';
 
   if (nativeSurface !== 'web') {
     ['admin-install-apk-btn', 'stock-install-apk-btn'].forEach(id => {
@@ -211,8 +210,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (nativeSurface === 'web' || nativeSurface === 'admin') initAdmin(renderApp);
-  if (nativeSurface === 'web' || nativeSurface === 'stock') initStockPanel(renderApp);
+  if (pageSurface === 'customer' || pageSurface === 'admin') initAdmin(renderApp);
+  if (pageSurface === 'stock') initStockPanel(renderApp);
   Store.initSupabase(renderApp);
 
 

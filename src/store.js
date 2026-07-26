@@ -551,11 +551,16 @@ export const Store = {
         stockAdd: true,
         stockRemove: true,
         stockSet: true,
+        stockViewLogs: true,
         stockClearLogs: true,
+        adminOverview: true,
         adminOrders: true,
         adminPrices: true,
         adminProducts: true,
-        adminUsers: true
+        adminContent: true,
+        adminShipping: true,
+        adminUsers: true,
+        adminSettings: true
       }
     };
     return [superAdmin];
@@ -583,11 +588,16 @@ export const Store = {
         stockAdd: true,
         stockRemove: true,
         stockSet: false,
+        stockViewLogs: true,
         stockClearLogs: false,
+        adminOverview: false,
         adminOrders: false,
         adminPrices: false,
         adminProducts: false,
-        adminUsers: false
+        adminContent: false,
+        adminShipping: false,
+        adminUsers: false,
+        adminSettings: false
       }
     };
     users.push(newUser);
@@ -612,8 +622,20 @@ export const Store = {
   hasSecureSession(surface) {
     return SupabaseManager.hasSecureSession(surface);
   },
+  restrictProtectedData(user, surface) {
+    const isSuperAdmin = user?.id === 'usr_super_admin';
+    const permissions = user?.permissions || {};
+    if (surface !== 'admin' || (!isSuperAdmin && permissions.adminOrders !== true)) {
+      localStorage.removeItem(STORAGE_KEYS.ORDERS);
+    }
+    if (surface !== 'stock' || (!isSuperAdmin && permissions.stockViewLogs === false)) {
+      localStorage.removeItem(STORAGE_KEYS.STOCK_LOGS);
+    }
+  },
   logoutUser() {
     SupabaseManager.clearSecureSession();
+    localStorage.removeItem(STORAGE_KEYS.ORDERS);
+    localStorage.removeItem(STORAGE_KEYS.STOCK_LOGS);
   },
   async authenticateUser(usernameOrId, passcode, surface) {
     const passTrimmed = (passcode || '').trim();

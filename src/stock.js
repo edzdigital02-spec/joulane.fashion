@@ -113,6 +113,10 @@ export function initStockPanel(refreshMainStoreFn) {
     });
 
     tabBtnLogs.addEventListener('click', () => {
+      if (!getCurrentUserPermissions().stockViewLogs) {
+        alert('عذراً! حسابك لا يملك صلاحية مشاهدة سجل حركة المخزن.');
+        return;
+      }
       tabBtnLogs.classList.add('active');
       tabBtnItems.classList.remove('active');
       if (tabSecLogs) tabSecLogs.classList.remove('hidden');
@@ -162,6 +166,11 @@ export function initStockPanel(refreshMainStoreFn) {
     sessionStorage.setItem('joulane_stock_auth', 'true');
     if (loginSec) loginSec.classList.add('hidden');
     if (contentSec) contentSec.classList.remove('hidden');
+    const permissions = getCurrentUserPermissions();
+    if (tabBtnLogs) tabBtnLogs.hidden = !permissions.stockViewLogs;
+    if (!permissions.stockViewLogs && tabBtnLogs?.classList.contains('active')) {
+      tabBtnItems?.click();
+    }
     populateStockCategoriesFilter();
     renderStockDashboard();
     renderStockLogs();
@@ -177,6 +186,7 @@ export function initStockPanel(refreshMainStoreFn) {
       if (user) {
         if (user.allowStock || user.id === 'usr_super_admin') {
           sessionStorage.setItem('joulane_current_stock_user', JSON.stringify(user));
+          Store.restrictProtectedData(user, 'stock');
           await Store.initSupabase(refreshMainStoreFn, { force: true });
           showStockDashboard();
           window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: `مرحباً بك يا ${user.name} في لوحة المخزن!` }));
@@ -202,7 +212,7 @@ export function initStockPanel(refreshMainStoreFn) {
   if (clearLogsBtn) {
     clearLogsBtn.addEventListener('click', () => {
       const perms = getCurrentUserPermissions();
-      if (!perms.stockClearLogs) {
+      if (!perms.stockViewLogs || !perms.stockClearLogs) {
         alert('عذراً! حسابك لا يملك صلاحية مسح وتفريغ سجل الشحنات. السجل مخصص للاحتفاظ بالدليل والدقة.');
         return;
       }
@@ -237,6 +247,8 @@ export function initStockPanel(refreshMainStoreFn) {
 
   function renderStockDashboard() {
     const products = Store.getProducts();
+    const permissions = getCurrentUserPermissions();
+    const canAdjustStock = permissions.stockAdd || permissions.stockRemove || permissions.stockSet;
     const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
     const cat = categoryFilter ? categoryFilter.value : 'all';
     const stat = statusFilter ? statusFilter.value : 'all';
@@ -333,11 +345,11 @@ export function initStockPanel(refreshMainStoreFn) {
               </div>
             </div>
 
-            <div style="margin-top: 4px;">
+            ${canAdjustStock ? `<div style="margin-top: 4px;">
               <button type="button" class="btn btn-gold btn-block btn-open-stock-entry" data-id="${p.id}" style="font-weight: 800; font-size: 0.88rem; width: 100%;">
                 <i class="fa-solid fa-box-archive"></i> إدخال / تعديل شحنة المخزون
               </button>
-            </div>
+            </div>` : ''}
           </div>
         </div>
       `;
@@ -368,19 +380,20 @@ export function initStockPanel(refreshMainStoreFn) {
         const u = JSON.parse(uJson);
         if (u) {
           if (u.id === 'usr_super_admin') {
-            return { stockAdd: true, stockRemove: true, stockSet: true, stockClearLogs: true };
+            return { stockAdd: true, stockRemove: true, stockSet: true, stockViewLogs: true, stockClearLogs: true };
           }
           const p = u.permissions || {};
           return {
             stockAdd: p.stockAdd !== false,
             stockRemove: p.stockRemove === true,
             stockSet: p.stockSet === true,
+            stockViewLogs: p.stockViewLogs !== false,
             stockClearLogs: p.stockClearLogs === true
           };
         }
       }
     } catch(e){}
-    return { stockAdd: true, stockRemove: true, stockSet: true, stockClearLogs: true };
+    return { stockAdd: false, stockRemove: false, stockSet: false, stockViewLogs: false, stockClearLogs: false };
   }
 
   function openStockEntryModal(product) {
@@ -639,6 +652,10 @@ export function initStockPanel(refreshMainStoreFn) {
   // --- Render Stock History Logs (Tab 2) ---
   function renderStockLogs() {
     const perms = getCurrentUserPermissions();
+    if (!perms.stockViewLogs) {
+      if (logsListContainer) logsListContainer.innerHTML = '';
+      return;
+    }
     if (clearLogsBtn) {
       clearLogsBtn.style.display = perms.stockClearLogs ? 'inline-flex' : 'none';
     }

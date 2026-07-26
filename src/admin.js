@@ -3,6 +3,40 @@ import { WILAYAS } from './data/wilayas.js';
 
 let isAdminLoggedIn = false;
 
+const ADMIN_TAB_PERMISSIONS = {
+  overview: 'adminOverview',
+  products: 'adminProducts',
+  categories: 'adminProducts',
+  cms: 'adminContent',
+  orders: 'adminOrders',
+  shipping: 'adminShipping',
+  users: 'adminUsers',
+  settings: 'adminSettings'
+};
+
+function getCurrentAdminUser() {
+  try {
+    return JSON.parse(sessionStorage.getItem('joulane_current_user') || 'null');
+  } catch (_) {
+    return null;
+  }
+}
+
+function hasAdminPermission(permission) {
+  const user = getCurrentAdminUser();
+  if (!user || !user.allowAdmin) return false;
+  if (user.id === 'usr_super_admin') return true;
+  return user.permissions?.[permission] === true;
+}
+
+function requireAdminPermission(permission, message) {
+  if (hasAdminPermission(permission)) return true;
+  window.dispatchEvent(new CustomEvent('joulane:showToast', {
+    detail: message || 'حسابك لا يملك صلاحية تنفيذ هذه العملية.'
+  }));
+  return false;
+}
+
 function enhanceAdminTables(root) {
   if (!root) return;
 
@@ -64,6 +98,7 @@ export function initAdmin(refreshMainStoreFn) {
   const logoutBtn = document.getElementById('admin-logout-btn');
   const installApkBtn = document.getElementById('admin-install-apk-btn');
   const mobileTabSelect = document.getElementById('admin-mobile-tab-select');
+  document.getElementById('tab-inventory')?.remove();
 
   const tableObserver = new MutationObserver(() => {
     window.requestAnimationFrame(() => enhanceAdminTables(adminModal));
@@ -151,31 +186,18 @@ export function initAdmin(refreshMainStoreFn) {
   }
 
   function enforceAdminUserPermissions() {
-    let currentUser = null;
-    try {
-      const uJson = sessionStorage.getItem('joulane_current_user');
-      if (uJson) currentUser = JSON.parse(uJson);
-    } catch(e){}
+    Object.entries(ADMIN_TAB_PERMISSIONS).forEach(([tab, permission]) => {
+      const allowed = hasAdminPermission(permission);
+      const tabButton = document.querySelector(`.admin-tab-btn[data-tab="${tab}"]`);
+      const tabOption = mobileTabSelect?.querySelector(`option[value="${tab}"]`);
+      if (tabButton) tabButton.hidden = !allowed;
+      if (tabOption) tabOption.hidden = !allowed;
+    });
 
-    if (!currentUser || currentUser.id === 'usr_super_admin') return;
-
-    const p = currentUser.permissions || {};
-    
-    const usersTabBtn = document.querySelector('.admin-tab-btn[data-tab="users"]');
-    if (usersTabBtn) {
-      const isHidden = p.adminUsers === false;
-      usersTabBtn.style.display = isHidden ? 'none' : '';
-      const usersOption = mobileTabSelect?.querySelector('option[value="users"]');
-      if (usersOption) usersOption.hidden = isHidden;
-    }
-
-    const ordersTabBtn = document.querySelector('.admin-tab-btn[data-tab="orders"]');
-    if (ordersTabBtn) {
-      const isHidden = p.adminOrders === false;
-      ordersTabBtn.style.display = isHidden ? 'none' : '';
-      const ordersOption = mobileTabSelect?.querySelector('option[value="orders"]');
-      if (ordersOption) ordersOption.hidden = isHidden;
-    }
+    const firstAllowedTab = Array.from(document.querySelectorAll('.admin-tab-btn'))
+      .find(button => !button.hidden);
+    const activeTab = document.querySelector('.admin-tab-btn.active');
+    if (activeTab?.hidden && firstAllowedTab) firstAllowedTab.click();
   }
 
   function showDashboard() {
@@ -185,13 +207,14 @@ export function initAdmin(refreshMainStoreFn) {
     contentSec.classList.remove('hidden');
     enforceAdminUserPermissions();
     populateCategoryDropdowns();
-    renderOverviewTab();
-    renderProductsTab();
-    renderInventoryTab();
-    renderCategoriesTab();
-    populateCmsForm();
-    renderOrdersTab();
-    renderShippingTab();
+    if (hasAdminPermission('adminOverview')) renderOverviewTab();
+    if (hasAdminPermission('adminProducts')) {
+      renderProductsTab();
+      renderCategoriesTab();
+    }
+    if (hasAdminPermission('adminContent')) populateCmsForm();
+    if (hasAdminPermission('adminOrders')) renderOrdersTab();
+    if (hasAdminPermission('adminShipping')) renderShippingTab();
     setupPriceToggleButtons(refreshMainStoreFn);
     setupSupabaseConfigForm(refreshMainStoreFn);
     setupUsersTab();
@@ -208,6 +231,7 @@ export function initAdmin(refreshMainStoreFn) {
       if (user) {
         if (user.allowAdmin || user.id === 'usr_super_admin') {
           sessionStorage.setItem('joulane_current_user', JSON.stringify(user));
+          Store.restrictProtectedData(user, 'admin');
           await Store.initSupabase(refreshMainStoreFn, { force: true });
           showDashboard();
           window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: `مرحباً بك يا ${user.name}!` }));
@@ -228,18 +252,20 @@ export function initAdmin(refreshMainStoreFn) {
   const tabBtns = document.querySelectorAll('.admin-tab-btn');
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
+      const tabTarget = btn.dataset.tab;
+      const requiredPermission = ADMIN_TAB_PERMISSIONS[tabTarget];
+      if (requiredPermission && !requireAdminPermission(requiredPermission)) return;
+
       tabBtns.forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.admin-tab-pane').forEach(p => p.classList.remove('active'));
       
       btn.classList.add('active');
-      const tabTarget = btn.dataset.tab;
       if (mobileTabSelect) mobileTabSelect.value = tabTarget;
       const targetPane = document.getElementById(`tab-${tabTarget}`);
       if (targetPane) targetPane.classList.add('active');
 
       if (tabTarget === 'overview') renderOverviewTab();
       if (tabTarget === 'products') renderProductsTab();
-      if (tabTarget === 'inventory') renderInventoryTab();
       if (tabTarget === 'categories') renderCategoriesTab();
       if (tabTarget === 'cms') populateCmsForm();
       if (tabTarget === 'orders') renderOrdersTab();
@@ -254,13 +280,17 @@ export function initAdmin(refreshMainStoreFn) {
   });
 
   // Quick Action Buttons
-  document.getElementById('quick-add-product-btn')?.addEventListener('click', () => openProductEditor());
-  document.getElementById('quick-edit-cms-btn')?.addEventListener('click', () => switchTab('cms'));
-  document.getElementById('quick-export-csv-btn')?.addEventListener('click', exportOrdersCsv);
-
-  // Inventory Search & Filters
-  document.getElementById('admin-inventory-search')?.addEventListener('input', renderInventoryTab);
-  document.getElementById('admin-inventory-status-filter')?.addEventListener('change', renderInventoryTab);
+  document.getElementById('quick-add-product-btn')?.addEventListener('click', () => {
+    if (!requireAdminPermission('adminProducts')) return;
+    if (!requireAdminPermission('adminPrices', 'إضافة منتج جديد تتطلب صلاحية إدارة الأسعار أيضًا.')) return;
+    openProductEditor();
+  });
+  document.getElementById('quick-edit-cms-btn')?.addEventListener('click', () => {
+    if (requireAdminPermission('adminContent')) switchTab('cms');
+  });
+  document.getElementById('quick-export-csv-btn')?.addEventListener('click', () => {
+    if (requireAdminPermission('adminOrders')) exportOrdersCsv();
+  });
 
   // Setup Price Toggle Buttons
   setupPriceToggleButtons(refreshMainStoreFn);
@@ -296,17 +326,34 @@ function switchTab(tabName) {
    TAB 1: OVERVIEW
    ========================================================================== */
 function renderOverviewTab() {
-  const orders = Store.getOrders();
+  if (!hasAdminPermission('adminOverview')) return;
+  const canManageOrders = hasAdminPermission('adminOrders');
+  const orders = canManageOrders ? Store.getOrders() : [];
   const products = Store.getProducts();
   
   const totalRevenue = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
   const homeCount = orders.filter(o => o.deliveryType === 'home').length;
   const deskCount = orders.filter(o => o.deliveryType === 'desk').length;
 
-  document.getElementById('stat-total-revenue').textContent = `${totalRevenue.toLocaleString('ar-DZ')} دج`;
-  document.getElementById('stat-total-orders').textContent = orders.length;
+  const revenueStat = document.getElementById('stat-total-revenue');
+  const ordersStat = document.getElementById('stat-total-orders');
+  const homeStat = document.getElementById('stat-home-count');
+  if (revenueStat) revenueStat.closest('.stat-card').hidden = !canManageOrders;
+  if (ordersStat) ordersStat.closest('.stat-card').hidden = !canManageOrders;
+  if (homeStat) homeStat.closest('.stat-card').hidden = !canManageOrders;
+  if (revenueStat) revenueStat.textContent = `${totalRevenue.toLocaleString('ar-DZ')} دج`;
+  if (ordersStat) ordersStat.textContent = orders.length;
   document.getElementById('stat-total-products').textContent = products.length;
-  document.getElementById('stat-home-count').textContent = `${homeCount} منزل / ${deskCount} مكتب`;
+  if (homeStat) homeStat.textContent = `${homeCount} منزل / ${deskCount} مكتب`;
+
+  const recentOrdersSection = document.querySelector('.recent-orders-sec');
+  if (recentOrdersSection) recentOrdersSection.hidden = !canManageOrders;
+  const quickAddButton = document.getElementById('quick-add-product-btn');
+  const quickCmsButton = document.getElementById('quick-edit-cms-btn');
+  const quickExportButton = document.getElementById('quick-export-csv-btn');
+  if (quickAddButton) quickAddButton.hidden = !(hasAdminPermission('adminProducts') && hasAdminPermission('adminPrices'));
+  if (quickCmsButton) quickCmsButton.hidden = !hasAdminPermission('adminContent');
+  if (quickExportButton) quickExportButton.hidden = !canManageOrders;
 
   // Recent 5 orders table
   const tbody = document.getElementById('overview-recent-orders-tbody');
@@ -334,6 +381,7 @@ function renderOverviewTab() {
    TAB 2: PRODUCTS CMS
    ========================================================================== */
 function renderProductsTab() {
+  if (!hasAdminPermission('adminProducts')) return;
   const container = document.getElementById('admin-products-container');
   if (!container) return;
 
@@ -358,9 +406,6 @@ function renderProductsTab() {
   }
 
   container.innerHTML = products.map(p => {
-    const stockStatus = p.stockStatus || 'in_stock';
-    const statusText = stockStatus === 'in_stock' ? 'متوفر' : (stockStatus === 'low_stock' ? 'كمية محدودة' : 'نفد / غير متوفر');
-    const badgeClass = stockStatus;
     const nameAr = p.name?.ar || p.name || 'منتج بدون اسم';
 
     return `
@@ -371,14 +416,10 @@ function renderProductsTab() {
             <h5>${nameAr}</h5>
             <div class="admin-prod-price">${(p.price || 0).toLocaleString()} دج <small style="font-size:0.8rem; font-weight:normal;">/ للزوج</small></div>
             <div class="admin-prod-series">الكرطون: ${(p.seriesPrice || 0).toLocaleString()} دج</div>
-            <div style="margin-top: 6px;">
-              <span class="stock-badge ${badgeClass}">${statusText}</span>
-            </div>
           </div>
         </div>
         <div class="admin-prod-actions">
           <button class="btn btn-outline-gold edit-prod-btn" data-id="${p.id}"><i class="fa-solid fa-pen"></i> تعديل</button>
-          <button class="btn btn-outline-gold toggle-stock-btn" data-id="${p.id}"><i class="fa-solid fa-rotate"></i> الحالة</button>
           <button class="btn btn-danger-outline delete-prod-btn" data-id="${p.id}"><i class="fa-solid fa-trash"></i></button>
         </div>
       </div>
@@ -388,29 +429,23 @@ function renderProductsTab() {
   // Event Listeners for action buttons
   container.querySelectorAll('.edit-prod-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      if (!requireAdminPermission('adminProducts')) return;
       const id = e.currentTarget.dataset.id;
       const p = Store.getProducts().find(item => item.id === id);
       if (p) openProductEditor(p);
     });
   });
 
-  container.querySelectorAll('.toggle-stock-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const id = e.currentTarget.dataset.id;
-      const products = Store.getProducts();
-      const p = products.find(item => item.id === id);
-      if (p) {
-        const nextStatus = p.stockStatus === 'in_stock' ? 'low_stock' : (p.stockStatus === 'low_stock' ? 'out_of_stock' : 'in_stock');
-        Store.updateProduct(id, { stockStatus: nextStatus });
-        renderProductsTab();
-        window.dispatchEvent(new CustomEvent('joulane:refreshStore'));
-      }
-    });
-  });
-
   container.querySelectorAll('.delete-prod-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      if (!requireAdminPermission('adminProducts')) return;
       const id = e.currentTarget.dataset.id;
+      const product = Store.getProducts().find(item => item.id === id);
+      const quantity = Number(product?.seriesQty ?? product?.stockQty ?? 0);
+      if (quantity > 0) {
+        alert('لا يمكن حذف منتج لديه رصيد في المخزن. يجب تصفير الرصيد من لوحة المخزن أولاً.');
+        return;
+      }
       if (confirm('هل أنت تأكد من رغبتك في حذف هذا المنتج نهائياً من المتجر؟')) {
         Store.deleteProduct(id);
         renderProductsTab();
@@ -423,7 +458,11 @@ function renderProductsTab() {
 // Add/Edit Product Listeners
 document.getElementById('admin-product-search')?.addEventListener('input', renderProductsTab);
 document.getElementById('admin-product-cat-filter')?.addEventListener('change', renderProductsTab);
-document.getElementById('add-product-btn')?.addEventListener('click', () => openProductEditor());
+document.getElementById('add-product-btn')?.addEventListener('click', () => {
+  if (!requireAdminPermission('adminProducts')) return;
+  if (!requireAdminPermission('adminPrices', 'إضافة منتج جديد تتطلب صلاحية إدارة الأسعار أيضًا.')) return;
+  openProductEditor();
+});
 
 /* ==========================================================================
    TAB: CATEGORIES MANAGER
@@ -434,6 +473,7 @@ function setupCategoriesTab(refreshMainStoreFn) {
     form.dataset.bound = 'true';
     form.addEventListener('submit', (e) => {
       e.preventDefault();
+      if (!requireAdminPermission('adminProducts')) return;
       const id = document.getElementById('cat-id-input').value.trim().toLowerCase().replace(/\s+/g, '-');
       const nameAr = document.getElementById('cat-name-ar-input').value.trim();
       const nameFr = document.getElementById('cat-name-fr-input').value.trim();
@@ -456,6 +496,7 @@ function setupCategoriesTab(refreshMainStoreFn) {
     tbody.addEventListener('click', (e) => {
       const btn = e.target.closest('.delete-cat-btn');
       if (!btn) return;
+      if (!requireAdminPermission('adminProducts')) return;
       const id = btn.dataset.id;
       if (confirm(`هل أنت تأكد من رغبتك في حذف القسم "${id}" نهائياً من المتجر؟`)) {
         Store.deleteCategory(id);
@@ -470,6 +511,7 @@ function setupCategoriesTab(refreshMainStoreFn) {
 }
 
 function renderCategoriesTab() {
+  if (!hasAdminPermission('adminProducts')) return;
   const tbody = document.getElementById('admin-categories-tbody');
   if (!tbody) return;
 
@@ -497,6 +539,7 @@ function renderCategoriesTab() {
       btn.dataset.bound = 'true';
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (!requireAdminPermission('adminProducts')) return;
         const id = e.currentTarget.dataset.id;
         if (confirm(`هل أنت تأكد من رغبتك في حذف القسم "${id}" نهائياً من المتجر؟`)) {
           Store.deleteCategory(id);
@@ -580,7 +623,14 @@ function setupProductEditor(refreshMainStoreFn) {
   if (form) {
     form.addEventListener('submit', (e) => {
       e.preventDefault();
+      if (!requireAdminPermission('adminProducts')) return;
       const id = document.getElementById('pe-id').value || document.getElementById('pe-id-display').value.trim();
+      const existingProduct = Store.getProducts().find(product => product.id === id) || null;
+      const canEditPrices = hasAdminPermission('adminPrices');
+      if (!existingProduct && !canEditPrices) {
+        requireAdminPermission('adminPrices', 'إضافة منتج جديد تتطلب صلاحية إدارة الأسعار أيضًا.');
+        return;
+      }
       const newProduct = {
         id,
         category: document.getElementById('pe-category').value,
@@ -588,11 +638,10 @@ function setupProductEditor(refreshMainStoreFn) {
           ar: document.getElementById('pe-name-ar').value.trim(),
           fr: document.getElementById('pe-name-fr').value.trim()
         },
-        price: parseFloat(document.getElementById('pe-price').value) || 0,
-        seriesPrice: parseFloat(document.getElementById('pe-series-price').value) || 0,
-        oldPrice: parseFloat(document.getElementById('pe-old-price').value) || 0,
+        price: canEditPrices ? (parseFloat(document.getElementById('pe-price').value) || 0) : (existingProduct?.price || 0),
+        seriesPrice: canEditPrices ? (parseFloat(document.getElementById('pe-series-price').value) || 0) : (existingProduct?.seriesPrice || 0),
+        oldPrice: canEditPrices ? (parseFloat(document.getElementById('pe-old-price').value) || 0) : (existingProduct?.oldPrice || 0),
         pairsPerSeries: parseInt(document.getElementById('pe-pairs').value, 10) || 6,
-        stockStatus: document.getElementById('pe-stock-status').value,
         discountBadge: {
           ar: document.getElementById('pe-badge-ar').value.trim(),
           fr: document.getElementById('pe-badge-fr').value.trim()
@@ -612,11 +661,10 @@ function setupProductEditor(refreshMainStoreFn) {
         }
       };
 
-      const existingIndex = Store.getProducts().findIndex(p => p.id === id);
-      if (existingIndex !== -1) {
+      if (existingProduct) {
         Store.updateProduct(id, newProduct);
       } else {
-        Store.addProduct(newProduct);
+        Store.addProduct({ ...newProduct, seriesQty: 0, stockStatus: 'out_of_stock' });
       }
 
       modal.classList.remove('active');
@@ -628,9 +676,15 @@ function setupProductEditor(refreshMainStoreFn) {
 }
 
 function openProductEditor(product = null) {
+  if (!requireAdminPermission('adminProducts')) return;
   const modal = document.getElementById('product-editor-modal');
   const titleEl = document.getElementById('product-editor-title');
   populateCategoryDropdowns();
+  const canEditPrices = hasAdminPermission('adminPrices');
+  ['pe-price', 'pe-series-price', 'pe-old-price'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.disabled = !canEditPrices;
+  });
   
   if (!product) {
     titleEl.innerHTML = `<i class="fa-solid fa-circle-plus"></i> إضافة منتج جديد`;
@@ -645,7 +699,6 @@ function openProductEditor(product = null) {
     document.getElementById('pe-series-price').value = 19200;
     document.getElementById('pe-old-price').value = 24000;
     document.getElementById('pe-pairs').value = 6;
-    document.getElementById('pe-stock-status').value = 'in_stock';
     document.getElementById('pe-badge-ar').value = 'جديد';
     document.getElementById('pe-badge-fr').value = 'Nouveau';
     document.getElementById('pe-image-url').value = '/images/303-3.PNG';
@@ -668,7 +721,6 @@ function openProductEditor(product = null) {
     document.getElementById('pe-series-price').value = product.seriesPrice || 0;
     document.getElementById('pe-old-price').value = product.oldPrice || 0;
     document.getElementById('pe-pairs').value = product.pairsPerSeries || 6;
-    document.getElementById('pe-stock-status').value = product.stockStatus || 'in_stock';
     document.getElementById('pe-badge-ar').value = product.discountBadge?.ar || '';
     document.getElementById('pe-badge-fr').value = product.discountBadge?.fr || '';
     document.getElementById('pe-image-url').value = product.image || '';
@@ -688,6 +740,7 @@ function openProductEditor(product = null) {
    TAB 3: HOMEPAGE CMS
    ========================================================================== */
 function populateCmsForm() {
+  if (!hasAdminPermission('adminContent')) return;
   const config = Store.getConfig();
   const form = document.getElementById('cms-editor-form');
   if (!form) return;
@@ -726,6 +779,7 @@ function setupCmsForm(refreshMainStoreFn) {
   if (form) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (!requireAdminPermission('adminContent')) return;
       const formData = new FormData(form);
       const updatedConfig = Store.getConfig();
       
@@ -760,8 +814,11 @@ function setupOrdersTab() {
     });
   });
 
-  document.getElementById('export-csv-btn')?.addEventListener('click', exportOrdersCsv);
+  document.getElementById('export-csv-btn')?.addEventListener('click', () => {
+    if (requireAdminPermission('adminOrders')) exportOrdersCsv();
+  });
   document.getElementById('clear-orders-btn')?.addEventListener('click', () => {
+    if (!requireAdminPermission('adminOrders')) return;
     if (confirm('هل أنت متأكد من رغبتك في مسح كل سجل الطلبات؟')) {
       Store.clearOrders();
       renderOrdersTab();
@@ -771,6 +828,7 @@ function setupOrdersTab() {
 }
 
 function renderOrdersTab() {
+  if (!hasAdminPermission('adminOrders')) return;
   const tbody = document.getElementById('admin-orders-tbody');
   const countBadge = document.getElementById('admin-orders-tab-count');
   if (!tbody) return;
@@ -838,6 +896,7 @@ function renderOrdersTab() {
   // Dropdown status change listener
   tbody.querySelectorAll('.order-status-select').forEach(select => {
     select.addEventListener('change', (e) => {
+      if (!requireAdminPermission('adminOrders')) return;
       const orderId = e.currentTarget.dataset.id;
       const newStatus = e.currentTarget.value;
       Store.updateOrderStatus(orderId, newStatus);
@@ -849,6 +908,7 @@ function renderOrdersTab() {
   // Delete individual order
   tbody.querySelectorAll('.delete-order-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      if (!requireAdminPermission('adminOrders')) return;
       const id = e.currentTarget.dataset.id;
       if (confirm(`حذف الطلب #${id}؟`)) {
         Store.deleteOrder(id);
@@ -860,6 +920,7 @@ function renderOrdersTab() {
 }
 
 function exportOrdersCsv() {
+  if (!requireAdminPermission('adminOrders')) return;
   const orders = Store.getOrders();
   if (orders.length === 0) {
     alert('لا توجد طلبات للتصدير حالياً.');
@@ -884,6 +945,7 @@ function setupShippingTab() {
   const saveBtn = document.getElementById('save-shipping-btn');
   if (saveBtn) {
     saveBtn.onclick = () => {
+      if (!requireAdminPermission('adminShipping')) return;
       const tbody = document.getElementById('shipping-rates-tbody');
       if (!tbody) return;
       const rates = {};
@@ -905,6 +967,7 @@ function setupShippingTab() {
 }
 
 function renderShippingTab() {
+  if (!hasAdminPermission('adminShipping')) return;
   const tbody = document.getElementById('shipping-rates-tbody');
   if (!tbody) return;
 
@@ -933,6 +996,7 @@ function setupSettingsTab(refreshMainStoreFn) {
   if (passForm) {
     passForm.addEventListener('submit', (e) => {
       e.preventDefault();
+      if (!requireAdminPermission('adminSettings')) return;
       const newPass = document.getElementById('new-admin-pass').value.trim();
       if (newPass.length < 3) {
         alert('يرجى كتابة كلمة مرور تتكون من 3 أحرف على الأقل.');
@@ -946,6 +1010,7 @@ function setupSettingsTab(refreshMainStoreFn) {
 
   // Export JSON Backup
   document.getElementById('export-backup-btn')?.addEventListener('click', () => {
+    if (!requireAdminPermission('adminSettings')) return;
     const data = Store.exportAllData();
     const jsonStr = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -958,6 +1023,7 @@ function setupSettingsTab(refreshMainStoreFn) {
 
   // Import JSON Backup
   document.getElementById('import-backup-file')?.addEventListener('change', (e) => {
+    if (!requireAdminPermission('adminSettings')) return;
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
@@ -984,12 +1050,12 @@ function setupSettingsTab(refreshMainStoreFn) {
 
   // Reset Factory
   document.getElementById('reset-store-btn')?.addEventListener('click', () => {
+    if (!requireAdminPermission('adminSettings')) return;
     if (confirm('تنبيه هام: هل أنت تأكد من رغبتك في إعادة ضبط المتجر للقيم الافتراضية؟ سيتم مسح المنتجات والنصوص المخصصة.')) {
       Store.resetToDefaults();
       alert('تم إعادة ضبط المتجر بنجاح!');
       renderOverviewTab();
       renderProductsTab();
-      renderInventoryTab();
       renderCategoriesTab();
       populateCmsForm();
       renderOrdersTab();
@@ -1154,6 +1220,7 @@ function setupPriceToggleButtons(refreshMainStoreFn) {
     const isHidden = !!Store.getConfig().hideAllPrices;
     [toggleBtn1, toggleBtn2].forEach(btn => {
       if (!btn) return;
+      btn.hidden = !hasAdminPermission('adminPrices');
       if (isHidden) {
         btn.classList.remove('btn-outline-gold');
         btn.classList.add('btn-warning');
@@ -1173,6 +1240,7 @@ function setupPriceToggleButtons(refreshMainStoreFn) {
     if (!btn || btn.dataset.priceToggleBound) return;
     btn.dataset.priceToggleBound = 'true';
     btn.addEventListener('click', () => {
+      if (!requireAdminPermission('adminPrices')) return;
       const config = Store.getConfig();
       config.hideAllPrices = !config.hideAllPrices;
       Store.saveConfig(config);
@@ -1214,6 +1282,7 @@ function setupSupabaseConfigForm(refreshMainStoreFn) {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!requireAdminPermission('adminSettings')) return;
     const url = urlInput ? urlInput.value.trim() : '';
     const key = keyInput ? keyInput.value.trim() : '';
 
@@ -1263,6 +1332,7 @@ function setupUsersTab() {
 
   if (showBtn && formCard) {
     showBtn.onclick = () => {
+      if (!requireAdminPermission('adminUsers')) return;
       resetUserForm();
       formCard.classList.remove('hidden');
     };
@@ -1277,6 +1347,7 @@ function setupUsersTab() {
   if (form) {
     form.onsubmit = async (e) => {
       e.preventDefault();
+      if (!requireAdminPermission('adminUsers')) return;
       const id = document.getElementById('user-form-id').value;
       const name = document.getElementById('user-name-input').value.trim();
       const role = document.getElementById('user-role-input').value.trim();
@@ -1286,11 +1357,19 @@ function setupUsersTab() {
       const allowAdmin = document.getElementById('user-perm-allow-admin').checked;
 
       const permissions = {
-        stockAdd: document.getElementById('user-perm-stock-add').checked,
-        stockRemove: document.getElementById('user-perm-stock-remove').checked,
-        stockSet: document.getElementById('user-perm-stock-set').checked,
-        stockClearLogs: !!document.getElementById('user-perm-stock-clear-logs')?.checked,
-        adminOrders: document.getElementById('user-perm-admin-orders').checked
+        stockAdd: allowStock && document.getElementById('user-perm-stock-add').checked,
+        stockRemove: allowStock && document.getElementById('user-perm-stock-remove').checked,
+        stockSet: allowStock && document.getElementById('user-perm-stock-set').checked,
+        stockViewLogs: allowStock && !!document.getElementById('user-perm-stock-view-logs')?.checked,
+        stockClearLogs: allowStock && !!document.getElementById('user-perm-stock-clear-logs')?.checked,
+        adminOverview: allowAdmin && !!document.getElementById('user-perm-admin-overview')?.checked,
+        adminProducts: allowAdmin && !!document.getElementById('user-perm-admin-products')?.checked,
+        adminPrices: allowAdmin && !!document.getElementById('user-perm-admin-prices')?.checked,
+        adminContent: allowAdmin && !!document.getElementById('user-perm-admin-content')?.checked,
+        adminOrders: allowAdmin && document.getElementById('user-perm-admin-orders').checked,
+        adminShipping: allowAdmin && !!document.getElementById('user-perm-admin-shipping')?.checked,
+        adminUsers: allowAdmin && !!document.getElementById('user-perm-admin-users')?.checked,
+        adminSettings: allowAdmin && !!document.getElementById('user-perm-admin-settings')?.checked
       };
 
       if (id) {
@@ -1324,13 +1403,18 @@ function resetUserForm() {
   document.getElementById('user-perm-stock-add').checked = true;
   document.getElementById('user-perm-stock-remove').checked = true;
   document.getElementById('user-perm-stock-set').checked = false;
+  if (document.getElementById('user-perm-stock-view-logs')) document.getElementById('user-perm-stock-view-logs').checked = true;
   if (document.getElementById('user-perm-stock-clear-logs')) document.getElementById('user-perm-stock-clear-logs').checked = false;
-  document.getElementById('user-perm-admin-orders').checked = false;
+  ['overview', 'products', 'prices', 'content', 'orders', 'shipping', 'users', 'settings'].forEach(permission => {
+    const checkbox = document.getElementById(`user-perm-admin-${permission}`);
+    if (checkbox) checkbox.checked = false;
+  });
   const title = document.getElementById('user-form-title');
   if (title) title.innerHTML = '<i class="fa-solid fa-user-plus"></i> إضافة حساب مسؤول جديد';
 }
 
 function renderUsersTab() {
+  if (!hasAdminPermission('adminUsers')) return;
   const container = document.getElementById('admin-users-list');
   if (!container) return;
 
@@ -1366,8 +1450,16 @@ function renderUsersTab() {
     if (p.stockAdd) opsBadges += '<span class="badge bg-outline-success border border-success text-success me-1">+ إضافة</span>';
     if (p.stockRemove) opsBadges += '<span class="badge bg-outline-danger border border-danger text-danger me-1">- سحب</span>';
     if (p.stockSet) opsBadges += '<span class="badge bg-outline-info border border-info text-info me-1">= تعديل</span>';
+    if (p.stockViewLogs) opsBadges += '<span class="badge bg-outline-info border border-info text-info me-1">سجل المخزن</span>';
     if (p.stockClearLogs) opsBadges += '<span class="badge bg-outline-danger border border-danger text-danger me-1">🗑️ تفريغ السجل</span>';
+    if (p.adminOverview) opsBadges += '<span class="badge bg-outline-warning border border-warning text-warning me-1">الإحصائيات</span>';
+    if (p.adminProducts) opsBadges += '<span class="badge bg-outline-warning border border-warning text-warning me-1">المنتجات</span>';
+    if (p.adminPrices) opsBadges += '<span class="badge bg-outline-warning border border-warning text-warning me-1">الأسعار</span>';
+    if (p.adminContent) opsBadges += '<span class="badge bg-outline-warning border border-warning text-warning me-1">الواجهة</span>';
     if (p.adminOrders) opsBadges += '<span class="badge bg-outline-warning border border-warning text-warning me-1">📦 الطلبات</span>';
+    if (p.adminShipping) opsBadges += '<span class="badge bg-outline-warning border border-warning text-warning me-1">التوصيل</span>';
+    if (p.adminUsers) opsBadges += '<span class="badge bg-outline-warning border border-warning text-warning me-1">الطاقم</span>';
+    if (p.adminSettings) opsBadges += '<span class="badge bg-outline-warning border border-warning text-warning me-1">الإعدادات</span>';
 
     html += `
       <tr>
@@ -1396,6 +1488,7 @@ function renderUsersTab() {
   // Bind edit & delete buttons
   container.querySelectorAll('.btn-edit-user').forEach(btn => {
     btn.onclick = (e) => {
+      if (!requireAdminPermission('adminUsers')) return;
       const id = e.currentTarget.dataset.id;
       const u = Store.getUsers().find(item => item.id === id);
       if (u) {
@@ -1410,8 +1503,13 @@ function renderUsersTab() {
         document.getElementById('user-perm-stock-add').checked = !!p.stockAdd;
         document.getElementById('user-perm-stock-remove').checked = !!p.stockRemove;
         document.getElementById('user-perm-stock-set').checked = !!p.stockSet;
+        if (document.getElementById('user-perm-stock-view-logs')) document.getElementById('user-perm-stock-view-logs').checked = !!p.stockViewLogs;
         if (document.getElementById('user-perm-stock-clear-logs')) document.getElementById('user-perm-stock-clear-logs').checked = !!p.stockClearLogs;
         document.getElementById('user-perm-admin-orders').checked = !!p.adminOrders;
+        ['overview', 'products', 'prices', 'content', 'shipping', 'users', 'settings'].forEach(permission => {
+          const checkbox = document.getElementById(`user-perm-admin-${permission}`);
+          if (checkbox) checkbox.checked = !!p[`admin${permission.charAt(0).toUpperCase()}${permission.slice(1)}`];
+        });
 
         const title = document.getElementById('user-form-title');
         if (title) title.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> تعديل حساب والصفة: ' + u.name;
@@ -1424,6 +1522,7 @@ function renderUsersTab() {
 
   container.querySelectorAll('.btn-delete-user').forEach(btn => {
     btn.onclick = async (e) => {
+      if (!requireAdminPermission('adminUsers')) return;
       const id = e.currentTarget.dataset.id;
       const u = Store.getUsers().find(item => item.id === id);
       if (u && confirm(`هل أنت تأكد من حذف حساب: ${u.name}؟`)) {

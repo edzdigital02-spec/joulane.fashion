@@ -377,7 +377,6 @@
             </div>
             <div class="admin-actions">
               <button id="admin-install-apk-btn" class="btn btn-gold btn-sm" title="تثبيت التطبيق"><i class="fa-solid fa-download"></i> <span>تثبيت</span><span class="admin-action-extra"> التطبيق</span></button>
-              <a href="#stock" id="open-stock-direct-btn" class="btn btn-gold btn-sm" title="فتح لوحة المخزن"><i class="fa-solid fa-boxes-stacked"></i> <span>المخزن</span><span class="admin-action-extra"> المباشر</span></a>
               <button id="admin-logout-btn" class="btn btn-outline-gold btn-sm"><i class="fa-solid fa-right-from-bracket"></i> خروج</button>
             </div>
           </div>
@@ -389,7 +388,6 @@
             <select id="admin-mobile-tab-select" class="form-control select-dark">
               <option value="overview">الإحصائيات</option>
               <option value="products">المنتجات</option>
-              <option value="inventory">المخزون</option>
               <option value="categories">إدارة الأقسام</option>
               <option value="cms">الواجهة الرئيسية</option>
               <option value="orders">الطلبات</option>
@@ -401,7 +399,6 @@
           <div class="admin-tabs-bar">
             <button class="admin-tab-btn active" data-tab="overview"><i class="fa-solid fa-chart-pie"></i> الإحصائيات</button>
             <button class="admin-tab-btn" data-tab="products"><i class="fa-solid fa-boxes-stacked"></i> المنتجات</button>
-            <button class="admin-tab-btn" data-tab="inventory"><i class="fa-solid fa-warehouse"></i> المخزون</button>
             <button class="admin-tab-btn" data-tab="categories"><i class="fa-solid fa-tags"></i> إدارة الأقسام</button>
             <button class="admin-tab-btn" data-tab="cms"><i class="fa-solid fa-pen-to-square"></i> الواجهة الرئيسية (CMS)</button>
             <button class="admin-tab-btn" data-tab="orders"><i class="fa-solid fa-cart-flatbed"></i> الطلبات (<span id="admin-orders-tab-count">0</span>)</button>
@@ -509,77 +506,6 @@
               </div>
 
               <div class="products-admin-grid" id="admin-products-container"></div>
-            </div>
-
-            <!-- TAB: INVENTORY MANAGER -->
-            <div class="admin-tab-pane" id="tab-inventory">
-              <div class="admin-pane-header">
-                <div>
-                  <h4><i class="fa-solid fa-warehouse"></i> إدارة المخزون (Gestion de Stock)</h4>
-                  <p class="text-muted">صفحة خاصة بالإدارة فقط: التحكم في الكراطين وحالة المخزون دون أن يراها الزبائن في المتجر</p>
-                </div>
-              </div>
-
-              <div class="admin-stats-strip inventory-stats-strip">
-                <div class="stat-card">
-                  <div class="stat-icon gold"><i class="fa-solid fa-boxes-packing"></i></div>
-                  <div>
-                    <span class="stat-num" id="inv-stat-total-series">0</span>
-                    <span class="stat-label">إجمالي الكراطين بالمخزن</span>
-                  </div>
-                </div>
-                <div class="stat-card">
-                  <div class="stat-icon green"><i class="fa-solid fa-circle-check"></i></div>
-                  <div>
-                    <span class="stat-num" id="inv-stat-instock">0</span>
-                    <span class="stat-label">موديلات متوفرة</span>
-                  </div>
-                </div>
-                <div class="stat-card">
-                  <div class="stat-icon orange"><i class="fa-solid fa-triangle-exclamation"></i></div>
-                  <div>
-                    <span class="stat-num" id="inv-stat-lowstock">0</span>
-                    <span class="stat-label">كميات محدودة</span>
-                  </div>
-                </div>
-                <div class="stat-card">
-                  <div class="stat-icon red"><i class="fa-solid fa-circle-xmark"></i></div>
-                  <div>
-                    <span class="stat-num" id="inv-stat-outofstock">0</span>
-                    <span class="stat-label">نفذت من المخزن</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="admin-pane-controls">
-                <div class="search-box">
-                  <i class="fa-solid fa-magnifying-glass"></i>
-                  <input type="text" id="admin-inventory-search" class="form-control" placeholder="بحث في المخزون بالاسم أو الكود..." />
-                </div>
-                <div class="filter-select">
-                  <select id="admin-inventory-status-filter" class="form-control">
-                    <option value="all">كل الحالات</option>
-                    <option value="in_stock">متوفر بالمخزن</option>
-                    <option value="low_stock">كمية محدودة</option>
-                    <option value="out_of_stock">غير متوفر</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="table-responsive">
-                <table class="admin-table inventory-table">
-                  <thead>
-                    <tr>
-                      <th>صورة الموديل</th>
-                      <th>الاسم والرمز المرجعي</th>
-                      <th>عدد الكراطين بالمخزن</th>
-                      <th>حالة التوفر للإدارة</th>
-                      <th>التحكم السريع</th>
-                    </tr>
-                  </thead>
-                  <tbody id="admin-inventory-tbody"></tbody>
-                </table>
-              </div>
             </div>
 
             <!-- TAB: CATEGORIES MANAGER -->
@@ -1129,6 +1055,7 @@
                           <input type="checkbox" id="user-perm-allow-admin" />
                           <span>👑 السماح بالدخول لـ <strong>لوحة التحكم (#admin)</strong></span>
                         </label>
+                        <div style="grid-column: 1/-1; color: var(--gold-primary, #c99332); font-weight: 800; margin-top: 4px;">صلاحيات المخزن</div>
                         <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
                           <input type="checkbox" id="user-perm-stock-add" checked />
                           <span>➕ السماح بـ <strong>إضافة شحنات للمخزن</strong></span>
@@ -1141,13 +1068,46 @@
                           <input type="checkbox" id="user-perm-stock-set" />
                           <span>🔵 السماح بـ <strong>التعديل المباشر لرصيد المخزن</strong></span>
                         </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-stock-view-logs" checked />
+                          <span>مشاهدة <strong>سجل حركة المخزن</strong></span>
+                        </label>
                         <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #ef4444; cursor: pointer;">
                           <input type="checkbox" id="user-perm-stock-clear-logs" />
                           <span>🗑️ السماح بـ <strong>مسح وتفريغ سجل الشحنات</strong></span>
                         </label>
+                        <div style="grid-column: 1/-1; color: var(--gold-primary, #c99332); font-weight: 800; margin-top: 4px;">صلاحيات لوحة الإدارة</div>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-admin-overview" />
+                          <span>مشاهدة <strong>الإحصائيات والملخص</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-admin-products" />
+                          <span>إدارة <strong>المنتجات والأقسام</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-admin-prices" />
+                          <span>إدارة <strong>الأسعار وإظهارها</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-admin-content" />
+                          <span>تعديل <strong>الواجهة الرئيسية</strong></span>
+                        </label>
                         <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
                           <input type="checkbox" id="user-perm-admin-orders" />
                           <span>📦 السماح بـ <strong>إدارة الطلبات المباشرة</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-admin-shipping" />
+                          <span>إدارة <strong>أسعار التوصيل</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-admin-users" />
+                          <span>إدارة <strong>طاقم العمل والصلاحيات</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #fff; cursor: pointer;">
+                          <input type="checkbox" id="user-perm-admin-settings" />
+                          <span>إدارة <strong>الأمان والنسخ الاحتياطي</strong></span>
                         </label>
                       </div>
                     </div>
@@ -1231,7 +1191,6 @@
             </div>
           </div>
 
-          <input type="hidden" id="pe-stock-status" value="in_stock" />
           <div class="form-row grid-1">
             <div class="form-group">
               <label>شارة التخفيض / العرض (عربي & فرنسي)</label>
