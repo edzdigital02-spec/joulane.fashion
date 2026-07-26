@@ -129,6 +129,7 @@ export const Store = {
       // Migrate existing browser/app data to the cloud only when a cloud row is absent.
       for (const [key, record] of Object.entries(CLOUD_RECORDS)) {
         if (Object.prototype.hasOwnProperty.call(remoteData, key)) continue;
+        if (['orders', 'stock_logs', 'users'].includes(key) && !SupabaseManager.hasSecureSession()) continue;
         const localValue = localStorage.getItem(record.storageKey);
         if (!localValue) continue;
 
@@ -212,9 +213,11 @@ export const Store = {
     if (!entries.length) return true;
 
     for (const [key, item] of entries) {
-      const ok = await SupabaseManager.pushData(key, item.data);
+      const ok = key.startsWith('order:')
+        ? await SupabaseManager.submitOrder(item.data)
+        : await SupabaseManager.pushData(key, item.data);
       if (ok) {
-        applyCloudRecord(key, item.data, false);
+        if (!key.startsWith('order:')) applyCloudRecord(key, item.data, false);
         delete pending[key];
       }
     }
@@ -255,6 +258,18 @@ export const Store = {
     const config = this.getConfig();
     config.adminPasscode = newPass;
     this.saveConfig(config);
+    try {
+      const currentUser = JSON.parse(sessionStorage.getItem('joulane_current_user') || 'null');
+      if (currentUser?.id) {
+        const users = this.getUsers().map(user => ({
+          ...user,
+          passcode: user.id === currentUser.id ? newPass : ''
+        }));
+        this.saveUsers(users);
+      }
+    } catch (error) {
+      console.warn('Could not update the secure staff passcode:', error);
+    }
   },
 
   // Categories Management
@@ -422,11 +437,22 @@ export const Store = {
     this.pushToCloud('orders', orders);
     window.dispatchEvent(new CustomEvent('joulane:ordersUpdated', { detail: orders }));
   },
-  addOrder(order) {
+  async submitOrder(order) {
+    const connected = await this.ensureSupabaseConnection();
+    if (!connected) {
+      this.queuePendingSync(`order:${order.id}`, order);
+      return false;
+    }
+    const ok = await SupabaseManager.submitOrder(order);
+    if (!ok) this.queuePendingSync(`order:${order.id}`, order);
+    return ok;
+  },
+  async addOrder(order) {
     const orders = this.getOrders();
     orders.unshift(order);
-    this.saveOrders(orders);
-    return orders;
+    localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
+    window.dispatchEvent(new CustomEvent('joulane:ordersUpdated', { detail: orders }));
+    return this.submitOrder(order);
   },
   updateOrderStatus(orderId, newStatus) {
     const orders = this.getOrders();
@@ -518,7 +544,7 @@ export const Store = {
       id: 'usr_super_admin',
       name: 'المدير العام',
       role: 'Super Admin',
-      passcode: this.getPasscode() || '1234',
+      passcode: '',
       allowAdmin: true,
       allowStock: true,
       permissions: {
@@ -535,9 +561,10 @@ export const Store = {
     return [superAdmin];
   },
   saveUsers(users) {
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    const safeUsers = users.map(user => ({ ...user, passcode: '' }));
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(safeUsers));
     this.pushToCloud('users', users);
-    window.dispatchEvent(new CustomEvent('joulane:usersUpdated', { detail: users }));
+    window.dispatchEvent(new CustomEvent('joulane:usersUpdated', { detail: safeUsers }));
   },
   addUser(user) {
     const users = this.getUsers();
@@ -578,60 +605,22 @@ export const Store = {
     this.saveUsers(users);
     return users;
   },
-  authenticateUser(usernameOrId, passcode) {
-    const users = this.getUsers();
-    const globalPass = this.getPasscode();
+  hasSecureSession(surface) {
+    return SupabaseManager.hasSecureSession(surface);
+  },
+  logoutUser() {
+    SupabaseManager.clearSecureSession();
+  },
+  async authenticateUser(usernameOrId, passcode, surface) {
     const passTrimmed = (passcode || '').trim();
     const userTrimmed = (usernameOrId || '').trim();
 
     if (!passTrimmed) return null;
 
-    // If username is provided, match both username/id AND passcode
-    if (userTrimmed && userTrimmed !== 'all') {
-      const matched = users.find(u =>
-        (u.id === userTrimmed || u.name.toLowerCase() === userTrimmed.toLowerCase()) &&
-        (u.passcode || '').trim() === passTrimmed
-      );
-      if (matched) return matched;
-      
-      // Check if super admin login via username
-      if ((userTrimmed === 'usr_super_admin' || userTrimmed === 'المدير العام') && passTrimmed === globalPass) {
-        return users.find(u => u.id === 'usr_super_admin') || {
-          id: 'usr_super_admin',
-          name: 'المدير العام',
-          role: 'Super Admin',
-          passcode: globalPass,
-          allowAdmin: true,
-          allowStock: true,
-          permissions: { stockAdd: true, stockRemove: true, stockSet: true, stockClearLogs: true, adminOrders: true, adminPrices: true, adminProducts: true, adminUsers: true }
-        };
-      }
-      return null;
-    }
-
-    // If no username specified or 'all', try matching by passcode alone
-    const matchedByPass = users.find(u => (u.passcode || '').trim() === passTrimmed);
-    if (matchedByPass) return matchedByPass;
-
-    if (passTrimmed === globalPass) {
-      return users.find(u => u.id === 'usr_super_admin') || {
-        id: 'usr_super_admin',
-        name: 'المدير العام',
-        role: 'Super Admin',
-        passcode: globalPass,
-        allowAdmin: true,
-        allowStock: true,
-        permissions: {
-          stockAdd: true,
-          stockRemove: true,
-          stockSet: true,
-          stockClearLogs: true,
-          adminOrders: true,
-          adminPrices: true,
-          adminProducts: true,
-          adminUsers: true
-        }
-      };
+    const connected = await this.ensureSupabaseConnection();
+    if (connected) {
+      const secureUser = await SupabaseManager.login(userTrimmed || 'all', passTrimmed, surface);
+      return secureUser || null;
     }
     return null;
   },

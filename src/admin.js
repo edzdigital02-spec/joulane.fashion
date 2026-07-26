@@ -98,6 +98,8 @@ export function initAdmin(refreshMainStoreFn) {
     logoutBtn.addEventListener('click', () => {
       isAdminLoggedIn = false;
       sessionStorage.removeItem('joulane_admin_auth');
+      sessionStorage.removeItem('joulane_current_user');
+      Store.logoutUser();
       showLoginScreen();
     });
   }
@@ -118,7 +120,7 @@ export function initAdmin(refreshMainStoreFn) {
 
   function openAdminModal() {
     adminModal.classList.add('active');
-    if (sessionStorage.getItem('joulane_admin_auth') === 'true' || isAdminLoggedIn) {
+    if ((sessionStorage.getItem('joulane_admin_auth') === 'true' || isAdminLoggedIn) && Store.hasSecureSession('admin')) {
       showDashboard();
     } else {
       showLoginScreen();
@@ -197,15 +199,16 @@ export function initAdmin(refreshMainStoreFn) {
 
   // Handle Login Submit
   if (loginForm) {
-    loginForm.addEventListener('submit', (e) => {
+    loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const selectedUserId = document.getElementById('admin-user-select')?.value || 'all';
       const enteredPass = passInput.value.trim();
-      const user = Store.authenticateUser(selectedUserId, enteredPass);
+      const user = await Store.authenticateUser(selectedUserId, enteredPass, 'admin');
 
       if (user) {
         if (user.allowAdmin || user.id === 'usr_super_admin') {
           sessionStorage.setItem('joulane_current_user', JSON.stringify(user));
+          await Store.initSupabase(refreshMainStoreFn, { force: true });
           showDashboard();
           window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: `مرحباً بك يا ${user.name}!` }));
         } else {

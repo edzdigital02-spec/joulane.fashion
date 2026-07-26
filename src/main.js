@@ -965,7 +965,7 @@ function updatePricingSummary() {
     : formatDzd(grandTotal);
 }
 
-function handleCheckoutSubmit(e) {
+async function handleCheckoutSubmit(e) {
   e.preventDefault();
   const cart = Store.getCart();
   if (cart.length === 0) {
@@ -1030,7 +1030,12 @@ function handleCheckoutSubmit(e) {
     status: "New"
   };
 
-  Store.addOrder(newOrder);
+  const orderSynced = await Store.addOrder(newOrder);
+  if (!orderSynced) {
+    showToast(currentLang === 'ar'
+      ? 'تم حفظ الطلب على جهازك وسيُرسل تلقائياً عند عودة الاتصال.'
+      : 'Commande sauvegardee et en attente de synchronisation.', 'warning');
+  }
   Store.clearCart();
   updateAdminBadgeCount();
 

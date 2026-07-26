@@ -82,7 +82,9 @@ export function initStockPanel(refreshMainStoreFn) {
     logoutStockBtn.addEventListener('click', () => {
       isStockAuth = false;
       sessionStorage.removeItem('joulane_stock_auth');
+      sessionStorage.removeItem('joulane_current_stock_user');
       localStorage.removeItem('joulane_stock_auth');
+      Store.logoutUser();
       showLoginScreen();
     });
   }
@@ -122,8 +124,8 @@ export function initStockPanel(refreshMainStoreFn) {
   function openStockModal() {
     stockModal.classList.add('active');
     document.body.classList.add('stock-mode-active');
-    const isAuthStored = localStorage.getItem('joulane_stock_auth') === 'true' ||
-                         sessionStorage.getItem('joulane_stock_auth') === 'true';
+    const isAuthStored = sessionStorage.getItem('joulane_stock_auth') === 'true' &&
+                         Store.hasSecureSession('stock');
     if (isAuthStored || isStockAuth) {
       showStockDashboard();
     } else {
@@ -158,7 +160,6 @@ export function initStockPanel(refreshMainStoreFn) {
   function showStockDashboard() {
     isStockAuth = true;
     sessionStorage.setItem('joulane_stock_auth', 'true');
-    localStorage.setItem('joulane_stock_auth', 'true');
     if (loginSec) loginSec.classList.add('hidden');
     if (contentSec) contentSec.classList.remove('hidden');
     populateStockCategoriesFilter();
@@ -167,15 +168,16 @@ export function initStockPanel(refreshMainStoreFn) {
   }
 
   if (loginForm) {
-    loginForm.addEventListener('submit', (e) => {
+    loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const selectedUserId = document.getElementById('stock-user-select')?.value || 'all';
       const enteredPass = passInput.value.trim();
-      const user = Store.authenticateUser(selectedUserId, enteredPass);
+      const user = await Store.authenticateUser(selectedUserId, enteredPass, 'stock');
 
       if (user) {
         if (user.allowStock || user.id === 'usr_super_admin') {
           sessionStorage.setItem('joulane_current_stock_user', JSON.stringify(user));
+          await Store.initSupabase(refreshMainStoreFn, { force: true });
           showStockDashboard();
           window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: `مرحباً بك يا ${user.name} في لوحة المخزن!` }));
         } else {
