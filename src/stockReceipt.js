@@ -1,6 +1,15 @@
 const PAGE_WIDTH = 1240;
 const PAGE_HEIGHT = 1754;
 const receiptPdfCache = new WeakMap();
+const targetedReceiptDownloads = new WeakSet();
+
+function isCapacitorNative() {
+  try {
+    return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  } catch (_) {
+    return false;
+  }
+}
 
 export function getStockReceiptReference(movement) {
   const date = getMovementDate(movement);
@@ -10,6 +19,7 @@ export function getStockReceiptReference(movement) {
 }
 
 export function canShareStockReceiptFiles() {
+  if (isCapacitorNative()) return true;
   if (!navigator.share || !navigator.canShare || typeof File === 'undefined') return false;
   try {
     return navigator.canShare({ files: [new File(['test'], 'test.pdf', { type: 'application/pdf' })] });
@@ -67,7 +77,7 @@ async function createBatchStockReceiptPdf(batch) {
 
   const reference = getStockReceiptReference(batch);
   const pages = [];
-  for (let index = 0; index < items.length; index += 4) pages.push(items.slice(index, index + 4));
+  for (let index = 0; index < items.length; index += 5) pages.push(items.slice(index, index + 5));
 
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4', compress: true });
   for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
@@ -128,117 +138,233 @@ function aggregateBatchMovements(movements) {
 }
 
 async function drawBatchReceiptPage(context, batch, items, pageNumber, totalPages) {
-  drawReceiptBackground(context);
+  context.fillStyle = '#f4f4f1';
+  context.fillRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT);
+  context.fillStyle = '#111111';
+  context.fillRect(0, 0, PAGE_WIDTH, 260);
+  context.fillStyle = '#c9a53a';
+  context.fillRect(0, 250, PAGE_WIDTH, 10);
+
   const logo = await loadImage('/images/logo.png');
   if (logo) {
     context.save();
-    roundedPath(context, 76, 58, 164, 164, 18);
+    roundedPath(context, 1020, 48, 144, 144, 18);
     context.clip();
-    context.drawImage(logo, 76, 58, 164, 164);
+    drawImageCover(context, logo, 1020, 48, 144, 144);
     context.restore();
   }
 
   context.direction = 'rtl';
   context.textAlign = 'right';
   context.fillStyle = '#e8ca63';
-  context.font = '700 54px Arial, sans-serif';
-  context.fillText('JOULANE FASHION', 1164, 100);
+  context.font = '700 42px Arial, sans-serif';
+  context.fillText('JOULANE FASHION', 984, 83);
   context.fillStyle = '#ffffff';
-  context.font = '700 40px Arial, sans-serif';
-  context.fillText('وصل شحنة مخزون مجمعة', 1164, 160);
+  context.font = '700 37px Arial, sans-serif';
+  context.fillText('محضر حركة مخزون', 984, 139);
   context.fillStyle = '#b9b9b9';
-  context.font = '500 25px Arial, sans-serif';
-  context.fillText(`${getStockReceiptReference(batch)} - الصفحة ${pageNumber} من ${totalPages}`, 1164, 212);
+  context.font = '500 23px Arial, sans-serif';
+  context.fillText('وصل موحد لشحنة متعددة الموديلات', 984, 182);
+
+  context.fillStyle = '#1b1b1b';
+  roundedPath(context, 76, 48, 390, 144, 16);
+  context.fill();
+  context.strokeStyle = '#5f5126';
+  context.lineWidth = 2;
+  context.stroke();
+  context.textAlign = 'center';
+  context.fillStyle = '#999999';
+  context.font = '600 20px Arial, sans-serif';
+  context.fillText('الرقم المرجعي', 271, 83);
   context.fillStyle = '#c9a53a';
-  context.font = '700 26px Arial, sans-serif';
-  context.fillText(formatMovementDate(getMovementDate(batch)), 1164, 258);
+  context.font = '700 27px Arial, sans-serif';
+  context.fillText(getStockReceiptReference(batch), 271, 126, 350);
+  context.fillStyle = '#d8d8d8';
+  context.font = '600 20px Arial, sans-serif';
+  context.fillText(`الصفحة ${pageNumber} من ${totalPages}`, 271, 163);
+
+  drawBatchMetaStrip(context, batch);
 
   const stats = getBatchReceiptStats(batch.movements);
   const summaryCards = [
     ['عدد الموديلات', stats.modelCount],
+    ['الكميات المتحركة', `${stats.moved} كرطون`],
     ['إجمالي الوارد', `${stats.inbound} كرطون`],
     ['إجمالي الصادر', `${stats.outbound} كرطون`]
   ];
   summaryCards.forEach(([label, value], index) => {
-    const x = 76 + index * 363;
-    context.fillStyle = '#ffffff';
-    roundedPath(context, x, 330, 338, 142, 14);
+    const x = 76 + index * 275;
+    context.fillStyle = index === 0 ? '#171717' : '#ffffff';
+    roundedPath(context, x, 396, 248, 112, 10);
     context.fill();
-    context.strokeStyle = '#ddd8cc';
-    context.lineWidth = 2;
+    context.strokeStyle = index === 0 ? '#171717' : '#d7d6d0';
+    context.lineWidth = 1.5;
     context.stroke();
     context.direction = 'rtl';
     context.textAlign = 'center';
-    context.fillStyle = '#777064';
-    context.font = '600 24px Arial, sans-serif';
-    context.fillText(label, x + 169, 376);
-    context.fillStyle = '#171717';
-    context.font = '700 38px Arial, sans-serif';
-    context.fillText(String(value), x + 169, 430, 300);
+    context.fillStyle = index === 0 ? '#b9b9b9' : '#77736b';
+    context.font = '600 20px Arial, sans-serif';
+    context.fillText(label, x + 124, 432);
+    context.fillStyle = index === 0 ? '#e8ca63' : '#171717';
+    context.font = '700 30px Arial, sans-serif';
+    context.fillText(String(value), x + 124, 478, 220);
   });
 
-  drawSectionTitle(context, 'الموديلات والتغييرات المسجلة', 535);
+  drawBatchTableHeader(context);
   const loadedImages = await Promise.all(items.map(item => loadImage(item.productImg)));
-  items.forEach((item, index) => drawBatchProductRow(context, item, loadedImages[index], 590 + index * 238));
+  items.forEach((item, index) => drawBatchProductRow(context, item, loadedImages[index], 600 + index * 190, index));
   drawBatchReceiptFooter(context, batch, pageNumber, totalPages);
 }
 
-function drawBatchProductRow(context, item, image, y) {
+function drawBatchMetaStrip(context, batch) {
   context.fillStyle = '#ffffff';
-  roundedPath(context, 76, y, 1088, 214, 16);
+  roundedPath(context, 76, 290, 1088, 76, 10);
   context.fill();
-  context.strokeStyle = '#d9d4c7';
-  context.lineWidth = 2;
+  context.strokeStyle = '#dcdbd5';
+  context.lineWidth = 1.5;
+  context.stroke();
+
+  const date = formatMovementDate(getMovementDate(batch));
+  const metadata = [
+    ['المسؤول', batch.operator || 'مسؤول المخزن'],
+    ['التاريخ والوقت', date],
+    ['عدد الحركات', `${batch.movements?.length || 0} حركة`]
+  ];
+  metadata.forEach(([label, value], index) => {
+    const centerX = 982 - index * 360;
+    if (index > 0) {
+      context.fillStyle = '#deddd7';
+      context.fillRect(centerX + 180, 306, 2, 44);
+    }
+    context.direction = 'rtl';
+    context.textAlign = 'center';
+    context.fillStyle = '#8a867e';
+    context.font = '600 17px Arial, sans-serif';
+    context.fillText(label, centerX, 316);
+    context.fillStyle = '#242424';
+    context.font = '700 21px Arial, sans-serif';
+    context.fillText(String(value), centerX, 346, 320);
+  });
+}
+
+function drawBatchTableHeader(context) {
+  context.fillStyle = '#242424';
+  roundedPath(context, 76, 540, 1088, 46, 7);
+  context.fill();
+  context.direction = 'rtl';
+  context.textAlign = 'center';
+  context.fillStyle = '#e5e2d8';
+  context.font = '700 18px Arial, sans-serif';
+  context.fillText('الموديل والتفاصيل', 890, 570);
+  context.fillText('العملية', 574, 570);
+  context.fillText('قبل', 430, 570);
+  context.fillText('التغيير', 292, 570);
+  context.fillText('بعد', 154, 570);
+}
+
+function drawBatchProductRow(context, item, image, y, rowIndex) {
+  context.fillStyle = rowIndex % 2 === 0 ? '#ffffff' : '#f9f9f7';
+  roundedPath(context, 76, y, 1088, 176, 9);
+  context.fill();
+  context.strokeStyle = '#d9d8d2';
+  context.lineWidth = 1.5;
   context.stroke();
 
   if (image) {
     context.save();
-    roundedPath(context, 974, y + 24, 160, 166, 12);
+    roundedPath(context, 1020, y + 17, 126, 142, 8);
     context.clip();
-    drawImageCover(context, image, 974, y + 24, 160, 166);
+    drawImageCover(context, image, 1020, y + 17, 126, 142);
     context.restore();
   } else {
-    context.fillStyle = '#ece8de';
-    roundedPath(context, 974, y + 24, 160, 166, 12);
+    context.fillStyle = '#ecece8';
+    roundedPath(context, 1020, y + 17, 126, 142, 8);
     context.fill();
     context.direction = 'rtl';
     context.textAlign = 'center';
-    context.fillStyle = '#8b8579';
-    context.font = '600 21px Arial, sans-serif';
-    context.fillText('الصورة غير متاحة', 1054, y + 112, 130);
+    context.fillStyle = '#85817a';
+    context.font = '600 17px Arial, sans-serif';
+    context.fillText('لا توجد صورة', 1083, y + 94, 110);
   }
 
+  context.fillStyle = '#e6e4de';
+  context.fillRect(1000, y + 18, 2, 140);
   context.direction = 'rtl';
   context.textAlign = 'right';
   context.fillStyle = '#171717';
-  context.font = '700 34px Arial, sans-serif';
-  drawWrappedRtlText(context, item.productName, 938, y + 57, 820, 40, 1);
+  context.font = '700 27px Arial, sans-serif';
+  drawWrappedRtlText(context, item.productName, 980, y + 49, 320, 34, 2);
 
-  const deltaText = `${item.delta > 0 ? '+' : ''}${item.delta} كرطون`;
-  context.fillStyle = item.delta > 0 ? '#198754' : item.delta < 0 ? '#c83b45' : '#326dcc';
-  context.font = '700 30px Arial, sans-serif';
-  context.fillText(deltaText, 938, y + 105);
-
-  context.fillStyle = '#655f56';
-  context.font = '600 24px Arial, sans-serif';
-  context.fillText(`الرصيد: ${item.oldQty} ← ${item.newQty}`, 938, y + 148);
   const reason = item.reasons.filter(Boolean).join('، ');
-  context.fillStyle = '#7a746b';
-  context.font = '500 22px Arial, sans-serif';
-  drawWrappedRtlText(context, `${reason}${item.movementCount > 1 ? ` - ${item.movementCount} حركات` : ''}`, 938, y + 184, 820, 30, 1);
+  context.fillStyle = '#77736c';
+  context.font = '500 18px Arial, sans-serif';
+  drawWrappedRtlText(context, reason, 980, y + 112, 320, 25, 2);
+  if (item.movementCount > 1) {
+    context.fillStyle = '#a08228';
+    context.font = '700 16px Arial, sans-serif';
+    context.fillText(`${item.movementCount} حركات مجمعة`, 980, y + 150, 320);
+  }
+
+  drawBatchOperationBadge(context, item, 574, y + 88);
+  drawBatchQuantityCell(context, item.oldQty, 430, y + 88, '#333333');
+  drawBatchQuantityCell(
+    context,
+    `${item.delta > 0 ? '+' : ''}${item.delta}`,
+    292,
+    y + 88,
+    item.delta > 0 ? '#168252' : item.delta < 0 ? '#c33d49' : '#326dcc'
+  );
+  drawBatchQuantityCell(context, item.newQty, 154, y + 88, '#171717');
+}
+
+function drawBatchOperationBadge(context, item, x, y) {
+  const operation = item.delta > 0 ? 'إضافة' : item.delta < 0 ? 'سحب' : 'تسوية';
+  const background = item.delta > 0 ? '#e8f6ef' : item.delta < 0 ? '#fbecef' : '#eaf1fb';
+  const foreground = item.delta > 0 ? '#168252' : item.delta < 0 ? '#b63340' : '#326dcc';
+  context.fillStyle = background;
+  roundedPath(context, x - 58, y - 29, 116, 58, 29);
+  context.fill();
+  context.direction = 'rtl';
+  context.textAlign = 'center';
+  context.fillStyle = foreground;
+  context.font = '700 21px Arial, sans-serif';
+  context.fillText(operation, x, y + 7);
+}
+
+function drawBatchQuantityCell(context, value, x, y, color) {
+  context.direction = String(value).match(/^[+-]/) ? 'ltr' : 'rtl';
+  context.textAlign = 'center';
+  context.fillStyle = color;
+  context.font = '700 29px Arial, sans-serif';
+  context.fillText(String(value), x, y + 2, 112);
+  context.direction = 'rtl';
+  context.fillStyle = '#8b877f';
+  context.font = '500 15px Arial, sans-serif';
+  context.fillText('كرطون', x, y + 29);
 }
 
 function drawBatchReceiptFooter(context, batch, pageNumber, totalPages) {
-  context.fillStyle = '#171717';
-  context.fillRect(0, 1594, PAGE_WIDTH, 160);
+  context.fillStyle = '#c9a53a';
+  context.fillRect(76, 1580, 1088, 3);
   context.direction = 'rtl';
-  context.textAlign = 'center';
+  context.textAlign = 'right';
+  context.fillStyle = '#353535';
+  context.font = '700 19px Arial, sans-serif';
+  context.fillText(`اعتمد بواسطة: ${batch.operator || 'مسؤول المخزن'}`, 1164, 1625, 420);
+  context.fillStyle = '#86827b';
+  context.font = '500 17px Arial, sans-serif';
+  context.fillText('وثيقة داخلية منشأة إلكترونياً من نظام إدارة مخزون Joulane Fashion', 1164, 1654, 700);
+
+  context.fillStyle = '#111111';
+  context.fillRect(0, 1684, PAGE_WIDTH, 70);
+  context.textAlign = 'left';
   context.fillStyle = '#e8ca63';
-  context.font = '700 28px Arial, sans-serif';
-  context.fillText(`المسؤول: ${batch.operator || 'مسؤول المخزن'}`, PAGE_WIDTH / 2, 1648);
-  context.fillStyle = '#b8b8b8';
-  context.font = '500 22px Arial, sans-serif';
-  context.fillText(`وصل إلكتروني مجمع - الصفحة ${pageNumber} من ${totalPages}`, PAGE_WIDTH / 2, 1696);
+  context.font = '700 19px Arial, sans-serif';
+  context.fillText(`JOULANE FASHION  |  ${getStockReceiptReference(batch)}`, 76, 1727);
+  context.direction = 'ltr';
+  context.textAlign = 'right';
+  context.fillStyle = '#d0d0d0';
+  context.fillText(`${pageNumber} / ${totalPages}`, 1164, 1727);
 }
 
 function getMovementDelta(movement) {
@@ -256,7 +382,8 @@ function getBatchReceiptStats(movements) {
     movementCount: (movements || []).length,
     inbound: deltas.filter(delta => delta > 0).reduce((total, delta) => total + delta, 0),
     outbound: deltas.filter(delta => delta < 0).reduce((total, delta) => total + Math.abs(delta), 0),
-    moved: deltas.reduce((total, delta) => total + Math.abs(delta), 0)
+    moved: deltas.reduce((total, delta) => total + Math.abs(delta), 0),
+    net: deltas.reduce((total, delta) => total + delta, 0)
   };
 }
 
@@ -289,23 +416,99 @@ export async function downloadStockReceipt(movement) {
 
 export async function shareStockReceipt(movement, fallbackWindow = null, recipient = null) {
   const receipt = await createStockReceiptPdf(movement);
-  const file = new File([receipt.blob], receipt.fileName, { type: 'application/pdf' });
   const recipientLabel = recipient?.name && recipient?.phone
     ? `المستلم المعتمد: ${recipient.name} (${recipient.phone})`
     : '';
   const targetedSummary = recipientLabel ? `${recipientLabel}\n${receipt.summary}` : receipt.summary;
+  const shareTitle = movement?.isBatchReceipt
+    ? `وصل شحنة المخزون المجمعة ${receipt.reference}`
+    : `وصل حركة المخزون ${receipt.reference}`;
+
+  // ── Capacitor native path ──
+  if (isCapacitorNative()) {
+    try {
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const { Share } = await import('@capacitor/share');
+
+      const base64Data = await blobToBase64(receipt.blob);
+      const written = await Filesystem.writeFile({
+        path: receipt.fileName,
+        data: base64Data,
+        directory: Directory.Cache
+      });
+
+      const shareResult = await Share.share({
+        title: shareTitle,
+        text: targetedSummary,
+        files: [written.uri],
+        dialogTitle: `مشاركة الوصل إلى ${recipient?.name || 'المستلم'}`
+      });
+
+      // Clean up temp file silently
+      Filesystem.deleteFile({ path: receipt.fileName, directory: Directory.Cache }).catch(() => {});
+      return {
+        ...receipt,
+        method: 'share',
+        recipient,
+        activityType: shareResult?.activityType || ''
+      };
+    } catch (error) {
+      if (error?.message?.includes('cancel') || error?.message?.includes('Cancel') || error?.errorMessage?.includes('cancel')) {
+        const abortError = new Error('Share cancelled');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
+      throw error;
+    }
+  }
+
+  // ── Web Share API path ──
+  const file = new File([receipt.blob], receipt.fileName, { type: 'application/pdf' });
+  const phonePath = String(recipient?.phone || '').replace(/\D/g, '');
+
+  // A targeted WhatsApp link is the only browser flow that guarantees the
+  // worker lands in the administrator-approved recipient's conversation.
+  if (phonePath) {
+    const shouldDownload = !movement || typeof movement !== 'object' || !targetedReceiptDownloads.has(movement);
+    if (shouldDownload) {
+      const downloadUrl = URL.createObjectURL(receipt.blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = receipt.fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1500);
+      if (movement && typeof movement === 'object') targetedReceiptDownloads.add(movement);
+    }
+
+    const attachmentHint = shouldDownload
+      ? `تم تنزيل ملف الوصل ${receipt.fileName}. أرفقه بهذه المحادثة.`
+      : `أرفق ملف الوصل ${receipt.fileName} الذي تم تنزيله عند بدء الإرسال.`;
+    const whatsappUrl = `https://wa.me/${phonePath}?text=${encodeURIComponent(`${targetedSummary}\n\n${attachmentHint}`)}`;
+    if (fallbackWindow && !fallbackWindow.closed) {
+      fallbackWindow.location.href = whatsappUrl;
+    } else {
+      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    }
+    return {
+      ...receipt,
+      method: 'whatsapp_link',
+      recipient,
+      fileDownloaded: shouldDownload
+    };
+  }
 
   if (canShareStockReceiptFiles()) {
     await navigator.share({
-      title: movement?.isBatchReceipt
-        ? `وصل شحنة المخزون المجمعة ${receipt.reference}`
-        : `وصل حركة المخزون ${receipt.reference}`,
+      title: shareTitle,
       text: targetedSummary,
       files: [file]
     });
     return { ...receipt, method: 'share', recipient };
   }
 
+  // ── Fallback: download + wa.me ──
   const url = URL.createObjectURL(receipt.blob);
   const link = document.createElement('a');
   link.href = url;
@@ -315,7 +518,6 @@ export async function shareStockReceipt(movement, fallbackWindow = null, recipie
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 
-  const phonePath = String(recipient?.phone || '').replace(/\D/g, '');
   const whatsappUrl = `https://wa.me/${phonePath}?text=${encodeURIComponent(`${targetedSummary}\n\nتم تنزيل ملف الوصل ${receipt.fileName}. أرفقه بهذه المحادثة.`)}`;
   if (fallbackWindow && !fallbackWindow.closed) {
     fallbackWindow.location.href = whatsappUrl;
@@ -514,5 +716,14 @@ function loadImage(url) {
     const source = String(url || '/images/303-3.PNG');
     if (/^https?:\/\//i.test(source)) image.crossOrigin = 'anonymous';
     image.src = source;
+  });
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
   });
 }

@@ -1,0 +1,12 @@
+.git
+.github
+.vercel
+android
+apks
+dist
+node_modules
+temp_icon_check
+.env*
+*.apk
+*.bat
+*.md

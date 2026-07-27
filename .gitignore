@@ -6,3 +6,5 @@ dist
 *.exe
 *.apk
 .aider*
+.vercel
+.env*

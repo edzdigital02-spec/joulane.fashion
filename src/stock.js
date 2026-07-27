@@ -1,6 +1,5 @@
 import { Store } from './store.js';
 import {
-  canShareStockReceiptFiles,
   downloadStockReceipt,
   getStockReceiptReference,
   shareStockReceipt
@@ -10,7 +9,9 @@ let isStockAuth = false;
 let activeProductForEntry = null;
 let currentEntryMode = 'add'; // 'add', 'remove', 'set'
 let activeMovementForReceipt = null;
+let pendingReceiptShareConfirmation = null;
 let activeStockBatch = null;
+let selectedReceiptRecipientPhones = new Set();
 
 const STOCK_BATCH_SESSION_KEY = 'joulane_active_stock_batch';
 
@@ -29,6 +30,10 @@ function persistActiveStockBatch() {
     return;
   }
   sessionStorage.setItem(STOCK_BATCH_SESSION_KEY, JSON.stringify(activeStockBatch));
+}
+
+function receiptPhoneKey(value) {
+  return String(value || '').replace(/\D/g, '');
 }
 
 function getBatchMovementDelta(movement) {
@@ -174,8 +179,10 @@ export function initStockPanel(refreshMainStoreFn) {
   const receiptStatus = document.getElementById('stock-receipt-status');
   const receiptDistribution = document.getElementById('stock-receipt-distribution');
   const receiptProgress = document.getElementById('stock-receipt-progress');
+  const selectAllReceiptRecipients = document.getElementById('stock-receipt-select-all');
   const receiptRecipientsList = document.getElementById('stock-receipt-recipients-list');
   const shareReceiptBtn = document.getElementById('share-stock-receipt-btn');
+  const confirmReceiptSentBtn = document.getElementById('confirm-stock-receipt-sent-btn');
   const downloadReceiptBtn = document.getElementById('download-stock-receipt-btn');
   const closeReceiptBtn = document.getElementById('close-stock-receipt-btn');
   const receiptTitle = document.getElementById('stock-receipt-title');
@@ -1045,27 +1052,76 @@ export function initStockPanel(refreshMainStoreFn) {
   }
 
   function getReceiptDistributionState(movement) {
-    const recipients = Store.getStockNotificationSettings().recipients || [];
+    const recipients = (Store.getStockNotificationSettings().recipients || [])
+      .filter(recipient => recipient?.name && receiptPhoneKey(recipient?.phone))
+      .filter((recipient, index, list) => (
+        list.findIndex(item => receiptPhoneKey(item.phone) === receiptPhoneKey(recipient.phone)) === index
+      ));
     const reference = getStockReceiptReference(movement);
     const deliveries = Store.getStockReceiptDeliveries().filter(delivery => (
-      delivery.receiptReference === reference && delivery.status === 'share_opened'
+      delivery.receiptReference === reference
+      && delivery.status === 'share_opened'
+      && delivery.confirmedByUser === true
     ));
-    const completedPhones = new Set(deliveries.map(delivery => String(delivery.recipientPhone || '')));
+    const completedPhones = new Set(deliveries.map(delivery => receiptPhoneKey(delivery.recipientPhone)));
+    const availablePhones = new Set(recipients.map(recipient => receiptPhoneKey(recipient.phone)));
+    selectedReceiptRecipientPhones = new Set(
+      [...selectedReceiptRecipientPhones].filter(phone => availablePhones.has(phone))
+    );
+    const selectedRecipients = recipients.filter(recipient => (
+      selectedReceiptRecipientPhones.has(receiptPhoneKey(recipient.phone))
+    ));
     return {
       recipients,
+      selectedRecipients,
       deliveries,
       completedPhones,
-      nextRecipient: recipients.find(recipient => !completedPhones.has(String(recipient.phone || ''))) || null
+      nextRecipient: selectedRecipients.find(recipient => (
+        !completedPhones.has(receiptPhoneKey(recipient.phone))
+      )) || null
     };
+  }
+
+  function persistReceiptRecipientSelection() {
+    if (!activeMovementForReceipt) return;
+    const selectedPhones = [...selectedReceiptRecipientPhones];
+    activeMovementForReceipt.receiptRecipientPhones = selectedPhones;
+    if (activeMovementForReceipt.isBatchReceipt && activeStockBatch?.id === activeMovementForReceipt.id) {
+      activeStockBatch.receiptRecipientPhones = selectedPhones;
+      activeStockBatch.updatedAt = new Date().toISOString();
+      persistActiveStockBatch();
+    }
+  }
+
+  function initializeReceiptRecipientSelection(movement) {
+    const recipients = Store.getStockNotificationSettings().recipients || [];
+    const availablePhones = recipients.map(recipient => receiptPhoneKey(recipient.phone)).filter(Boolean);
+    const savedSelection = Array.isArray(movement?.receiptRecipientPhones)
+      ? movement.receiptRecipientPhones.map(receiptPhoneKey)
+      : null;
+    selectedReceiptRecipientPhones = new Set(
+      savedSelection
+        ? savedSelection.filter(phone => availablePhones.includes(phone))
+        : availablePhones
+    );
+    persistReceiptRecipientSelection();
   }
 
   function renderReceiptDistribution() {
     if (!activeMovementForReceipt || !receiptDistribution || !receiptRecipientsList) return;
     const state = getReceiptDistributionState(activeMovementForReceipt);
-    const completedCount = state.recipients.filter(recipient => state.completedPhones.has(String(recipient.phone || ''))).length;
+    const completedCount = state.selectedRecipients.filter(recipient => (
+      state.completedPhones.has(receiptPhoneKey(recipient.phone))
+    )).length;
+    const selectedCount = state.selectedRecipients.length;
 
     receiptDistribution.classList.remove('hidden');
-    if (receiptProgress) receiptProgress.textContent = `${completedCount} / ${state.recipients.length}`;
+    if (receiptProgress) receiptProgress.textContent = `${completedCount} / ${selectedCount} تم`;
+    if (selectAllReceiptRecipients) {
+      selectAllReceiptRecipients.checked = state.recipients.length > 0 && selectedCount === state.recipients.length;
+      selectAllReceiptRecipients.indeterminate = selectedCount > 0 && selectedCount < state.recipients.length;
+      selectAllReceiptRecipients.disabled = state.recipients.length === 0 || !!pendingReceiptShareConfirmation;
+    }
 
     if (state.recipients.length === 0) {
       receiptRecipientsList.innerHTML = `
@@ -1078,42 +1134,80 @@ export function initStockPanel(refreshMainStoreFn) {
         shareReceiptBtn.disabled = true;
         shareReceiptBtn.innerHTML = '<i class="fa-brands fa-whatsapp"></i> المستلمون غير مضبوطين';
       }
+      confirmReceiptSentBtn?.classList.add('hidden');
       if (closeReceiptBtn) closeReceiptBtn.disabled = false;
       return;
     }
 
-    receiptRecipientsList.innerHTML = state.recipients.map((recipient, index) => {
-      const delivery = state.deliveries.find(item => String(item.recipientPhone || '') === String(recipient.phone || ''));
+    receiptRecipientsList.innerHTML = state.recipients.map(recipient => {
+      const phoneKey = receiptPhoneKey(recipient.phone);
+      const isSelected = selectedReceiptRecipientPhones.has(phoneKey);
+      const delivery = state.deliveries.find(item => receiptPhoneKey(item.recipientPhone) === phoneKey);
       const isComplete = !!delivery;
+      const isAwaitingConfirmation = !isComplete
+        && receiptPhoneKey(pendingReceiptShareConfirmation?.recipient?.phone) === phoneKey;
+      const isNext = isSelected && receiptPhoneKey(state.nextRecipient?.phone) === phoneKey;
       const statusText = isComplete
-        ? `فُتحت المشاركة ${formatLogDate(delivery)}`
-        : index === completedCount ? 'المستلم التالي' : 'بانتظار دوره';
+        ? `تم تأكيد الإرسال ${formatLogDate(delivery)}`
+        : isAwaitingConfirmation
+          ? 'بانتظار تأكيد الإرسال'
+          : !isSelected
+            ? 'غير محدد لهذه الدفعة'
+            : isNext
+              ? 'المستلم التالي'
+              : 'ضمن قائمة الإرسال';
       return `
-        <div class="stock-receipt-recipient ${isComplete ? 'is-complete' : ''} ${!isComplete && index === completedCount ? 'is-next' : ''}">
-          <span class="stock-receipt-recipient-state"><i class="fa-solid ${isComplete ? 'fa-check' : 'fa-clock'}"></i></span>
+        <label class="stock-receipt-recipient ${isSelected ? 'is-selected' : ''} ${isComplete ? 'is-complete' : ''} ${isNext ? 'is-next' : ''}">
+          <input
+            type="checkbox"
+            class="stock-receipt-recipient-checkbox"
+            data-phone="${escapeHtml(phoneKey)}"
+            ${isSelected ? 'checked' : ''}
+            ${pendingReceiptShareConfirmation ? 'disabled' : ''}
+          />
+          <span class="stock-receipt-recipient-state"><i class="fa-solid ${isComplete ? 'fa-check' : isSelected ? 'fa-user-check' : 'fa-user'}"></i></span>
           <div class="stock-receipt-recipient-info">
             <strong>${escapeHtml(recipient.name || 'مستلم')}</strong>
-            <span dir="ltr">+${escapeHtml(recipient.phone || '')}</span>
+            <span dir="ltr">+${escapeHtml(phoneKey)}</span>
           </div>
           <small>${escapeHtml(statusText)}</small>
-        </div>
+        </label>
       `;
     }).join('');
 
-    const allComplete = completedCount === state.recipients.length;
+    receiptRecipientsList.querySelectorAll('.stock-receipt-recipient-checkbox').forEach(input => {
+      input.addEventListener('change', () => {
+        const phone = receiptPhoneKey(input.dataset.phone);
+        if (!phone || pendingReceiptShareConfirmation) return;
+        if (input.checked) selectedReceiptRecipientPhones.add(phone);
+        else selectedReceiptRecipientPhones.delete(phone);
+        persistReceiptRecipientSelection();
+        renderReceiptDistribution();
+      });
+    });
+
+    const allComplete = selectedCount > 0 && completedCount === selectedCount;
+    const awaitingConfirmation = !!pendingReceiptShareConfirmation;
     if (shareReceiptBtn) {
-      shareReceiptBtn.disabled = allComplete;
-      shareReceiptBtn.innerHTML = allComplete
+      shareReceiptBtn.disabled = allComplete || selectedCount === 0;
+      shareReceiptBtn.innerHTML = selectedCount === 0
+        ? '<i class="fa-solid fa-user-check"></i> اختر مستلماً واحداً على الأقل'
+        : allComplete
         ? '<i class="fa-solid fa-circle-check"></i> اكتملت قائمة المشاركة'
-        : `<i class="fa-brands fa-whatsapp"></i> مشاركة إلى ${escapeHtml(state.nextRecipient?.name || 'المستلم التالي')}`;
+        : awaitingConfirmation
+          ? `<i class="fa-brands fa-whatsapp"></i> إعادة فتح المشاركة إلى ${escapeHtml(state.nextRecipient?.name || 'المستلم التالي')}`
+          : `<i class="fa-brands fa-whatsapp"></i> إرسال إلى ${escapeHtml(state.nextRecipient?.name || 'المستلم التالي')} (${completedCount + 1} من ${selectedCount})`;
     }
-    if (closeReceiptBtn) closeReceiptBtn.disabled = !allComplete;
+    confirmReceiptSentBtn?.classList.toggle('hidden', !awaitingConfirmation || allComplete);
+    if (closeReceiptBtn) closeReceiptBtn.disabled = state.recipients.length > 0 && !allComplete;
   }
 
   async function openReceiptActions(movement) {
     if (!movement || !receiptSubmodal) return;
     await Store.initSupabase(null, { force: true });
     activeMovementForReceipt = movement;
+    pendingReceiptShareConfirmation = null;
+    initializeReceiptRecipientSelection(movement);
     const isBatchReceipt = movement.isBatchReceipt && Array.isArray(movement.movements);
     if (receiptTitle) receiptTitle.textContent = isBatchReceipt ? 'تم تحديث المخزون وإنشاء الوصل المجمع' : 'وصل حركة المخزون';
     if (receiptDescription) {
@@ -1138,33 +1232,96 @@ export function initStockPanel(refreshMainStoreFn) {
     const completedReceipt = activeMovementForReceipt;
     if (completedReceipt?.isBatchReceipt) {
       const state = getReceiptDistributionState(completedReceipt);
-      if (state.recipients.length && state.nextRecipient) return;
+      if (state.recipients.length && (!state.selectedRecipients.length || state.nextRecipient)) return;
       activeStockBatch = null;
       persistActiveStockBatch();
       renderActiveStockBatchBar();
     }
     receiptSubmodal?.classList.remove('active');
     activeMovementForReceipt = null;
+    pendingReceiptShareConfirmation = null;
     if (receiptStatus) receiptStatus.textContent = '';
   }
 
   closeReceiptBtn?.addEventListener('click', closeReceiptActions);
+  selectAllReceiptRecipients?.addEventListener('change', () => {
+    if (!activeMovementForReceipt || pendingReceiptShareConfirmation) return;
+    const recipients = Store.getStockNotificationSettings().recipients || [];
+    selectedReceiptRecipientPhones = selectAllReceiptRecipients.checked
+      ? new Set(recipients.map(recipient => receiptPhoneKey(recipient.phone)).filter(Boolean))
+      : new Set();
+    persistReceiptRecipientSelection();
+    renderReceiptDistribution();
+  });
 
-  shareReceiptBtn?.addEventListener('click', async () => {
+  async function shareToNextRecipient() {
     if (!activeMovementForReceipt) return;
+    pendingReceiptShareConfirmation = null;
     const state = getReceiptDistributionState(activeMovementForReceipt);
     const recipient = state.nextRecipient;
     if (!recipient) return;
-    const fallbackWindow = canShareStockReceiptFiles() ? null : window.open('', '_blank');
+    const isNativeApp = !!(
+      window.Capacitor
+      && window.Capacitor.isNativePlatform
+      && window.Capacitor.isNativePlatform()
+    );
+    const fallbackWindow = isNativeApp ? null : window.open('', '_blank');
     setReceiptBusy(true, `جارٍ تجهيز الوصل إلى ${recipient.name}...`);
     let shareOpened = false;
     try {
       const result = await shareStockReceipt(activeMovementForReceipt, fallbackWindow, recipient);
       shareOpened = true;
-      const movementIds = activeMovementForReceipt.isBatchReceipt
-        ? activeMovementForReceipt.movements.map(movement => movement.id).filter(Boolean)
-        : [activeMovementForReceipt.id].filter(Boolean);
-      const marked = await Store.markStockReceiptDelivery({
+      const selectedApp = String(result.activityType || '').toLowerCase();
+      if (selectedApp && !['com.whatsapp', 'com.whatsapp.w4b'].includes(selectedApp)) {
+        if (receiptStatus) receiptStatus.textContent = 'لم يتم اختيار واتساب. أعد فتح المشاركة واختر واتساب ثم أرسل الوصل.';
+        setReceiptBusy(false);
+        return;
+      }
+
+      pendingReceiptShareConfirmation = { result, recipient };
+      if (receiptStatus) {
+        receiptStatus.textContent = result.method === 'whatsapp_link'
+          ? `فُتحت محادثة ${recipient.name}. أرفق ملف PDF الذي تم تنزيله، ثم ارجع واضغط تأكيد الإرسال.`
+          : `بعد إرسال ملف PDF إلى ${recipient.name} داخل واتساب، اضغط زر تأكيد الإرسال.`;
+      }
+      setReceiptBusy(false);
+      return;
+    } catch (error) {
+      if (!shareOpened && fallbackWindow && !fallbackWindow.closed) fallbackWindow.close();
+      if (receiptStatus) {
+        if (error?.name === 'AbortError') {
+          receiptStatus.textContent = 'تم إلغاء المشاركة. لم تُحسب لهذا المستلم. اضغط الزر لإعادة المحاولة.';
+        } else if (shareOpened) {
+          receiptStatus.textContent = 'فُتحت المشاركة، لكن تعذر تسجيلها سحابياً. تحقق من الاتصال ثم أعد المحاولة.';
+        } else {
+          receiptStatus.textContent = 'تعذرت المشاركة. جرّب مرة أخرى من الهاتف.';
+        }
+      }
+      setReceiptBusy(false);
+      return;
+    }
+  }
+
+  shareReceiptBtn?.addEventListener('click', () => shareToNextRecipient());
+
+  confirmReceiptSentBtn?.addEventListener('click', async () => {
+    if (!activeMovementForReceipt || !pendingReceiptShareConfirmation) return;
+    const { result, recipient } = pendingReceiptShareConfirmation;
+    const state = getReceiptDistributionState(activeMovementForReceipt);
+    if (receiptPhoneKey(state.nextRecipient?.phone) !== receiptPhoneKey(recipient.phone)) {
+      pendingReceiptShareConfirmation = null;
+      renderReceiptDistribution();
+      if (receiptStatus) receiptStatus.textContent = 'تغيّرت قائمة المستلمين. افتح المشاركة للمستلم التالي من جديد.';
+      return;
+    }
+
+    const movementIds = activeMovementForReceipt.isBatchReceipt
+      ? activeMovementForReceipt.movements.map(movement => movement.id).filter(Boolean)
+      : [activeMovementForReceipt.id].filter(Boolean);
+    setReceiptBusy(true, `جارٍ تسجيل تأكيد الإرسال إلى ${recipient.name}...`);
+    let marked = false;
+    try {
+      marked = await Store.markStockReceiptDelivery({
         movementId: movementIds[0] || '',
         movementIds,
         batchId: activeMovementForReceipt.isBatchReceipt ? activeMovementForReceipt.id : '',
@@ -1172,28 +1329,27 @@ export function initStockPanel(refreshMainStoreFn) {
         recipientId: recipient.id,
         recipientName: recipient.name,
         recipientPhone: recipient.phone,
-        shareMethod: result.method
+        shareMethod: result.method,
+        shareActivityType: result.activityType || '',
+        confirmedByUser: true,
+        confirmedAt: new Date().toISOString()
       });
-      if (!marked) throw new Error('Could not record receipt sharing');
-      renderReceiptDistribution();
-      if (receiptStatus) {
-        receiptStatus.textContent = result.method === 'share'
-          ? `فُتحت المشاركة إلى ${recipient.name} وسُجلت العملية. تأكد من الإرسال داخل واتساب.`
-          : `فُتحت محادثة ${recipient.name}. أرفق ملف PDF الذي تم تنزيله ثم أرسله.`;
-      }
     } catch (error) {
-      if (!shareOpened && fallbackWindow && !fallbackWindow.closed) fallbackWindow.close();
-      if (receiptStatus) {
-        if (error?.name === 'AbortError') {
-          receiptStatus.textContent = 'تم إلغاء المشاركة. لم تُحسب لهذا المستلم.';
-        } else if (shareOpened) {
-          receiptStatus.textContent = 'فُتحت المشاركة، لكن تعذر تسجيلها سحابياً. تحقق من الاتصال ثم أعد المحاولة.';
-        } else {
-          receiptStatus.textContent = 'تعذرت المشاركة. جرّب مرة أخرى من الهاتف.';
-        }
-      }
-    } finally {
+      marked = false;
+    }
+    if (!marked) {
+      if (receiptStatus) receiptStatus.textContent = 'تعذر حفظ التأكيد سحابياً. تحقق من الاتصال ثم اضغط تأكيد مرة أخرى.';
       setReceiptBusy(false);
+      return;
+    }
+
+    pendingReceiptShareConfirmation = null;
+    setReceiptBusy(false);
+    const updatedState = getReceiptDistributionState(activeMovementForReceipt);
+    if (receiptStatus) {
+      receiptStatus.textContent = updatedState.nextRecipient
+        ? `تم تأكيد الإرسال إلى ${recipient.name}. اضغط مشاركة لإرسال الوصل إلى ${updatedState.nextRecipient.name}.`
+        : 'اكتملت مشاركة الوصل لجميع المستلمين بعد تأكيد الإرسال.';
     }
   });
 
@@ -1211,7 +1367,7 @@ export function initStockPanel(refreshMainStoreFn) {
   });
 
   function setReceiptBusy(isBusy, message = '') {
-    [shareReceiptBtn, downloadReceiptBtn, closeReceiptBtn].forEach(button => {
+    [shareReceiptBtn, confirmReceiptSentBtn, downloadReceiptBtn, closeReceiptBtn].forEach(button => {
       if (button) button.disabled = isBusy;
     });
     if (receiptStatus && message) receiptStatus.textContent = message;

@@ -1643,19 +1643,28 @@
         <div id="stock-receipt-distribution" class="stock-receipt-distribution hidden">
           <div class="stock-receipt-distribution-heading">
             <div>
-              <strong>قائمة الإرسال المعتمدة</strong>
-              <span>حددها المدير العام</span>
+              <strong>اختر مستلمي الوصل</strong>
+              <span>يمكن الاختيار فقط من قائمة المدير العام</span>
             </div>
-            <span id="stock-receipt-progress" class="stock-receipt-progress">0 / 3</span>
+            <div class="stock-receipt-distribution-controls">
+              <label class="stock-receipt-select-all">
+                <input id="stock-receipt-select-all" type="checkbox" />
+                <span>تحديد الكل</span>
+              </label>
+              <span id="stock-receipt-progress" class="stock-receipt-progress">0 / 0 تم</span>
+            </div>
           </div>
           <div id="stock-receipt-recipients-list" class="stock-receipt-recipients-list"></div>
           <p class="stock-receipt-policy">
-            يجب فتح المشاركة لكل مستلم بالترتيب. عند ظهور واتساب، تأكد من اختيار الاسم المعروض ثم أرسل ملف PDF.
+            حدد الأشخاص المطلوبين، ثم أرسل الوصل للمستلم الظاهر على الزر. بعد إرساله داخل واتساب ارجع واضغط تأكيد للانتقال تلقائياً إلى المستلم التالي.
           </p>
         </div>
         <div class="stock-receipt-actions">
           <button type="button" id="share-stock-receipt-btn" class="btn btn-whatsapp">
             <i class="fa-brands fa-whatsapp"></i> مشاركة الوصل
+          </button>
+          <button type="button" id="confirm-stock-receipt-sent-btn" class="btn btn-gold hidden">
+            <i class="fa-solid fa-check"></i> تأكيد أنني أرسلت الوصل
           </button>
           <button type="button" id="download-stock-receipt-btn" class="btn btn-outline-gold">
             <i class="fa-solid fa-file-pdf"></i> تنزيل PDF
