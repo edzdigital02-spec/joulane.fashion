@@ -217,6 +217,7 @@ export function initAdmin(refreshMainStoreFn) {
     if (hasAdminPermission('adminShipping')) renderShippingTab();
     setupPriceToggleButtons(refreshMainStoreFn);
     setupSupabaseConfigForm(refreshMainStoreFn);
+    setupStockReceiptRecipientsForm();
     setupUsersTab();
   }
 
@@ -270,6 +271,7 @@ export function initAdmin(refreshMainStoreFn) {
       if (tabTarget === 'cms') populateCmsForm();
       if (tabTarget === 'orders') renderOrdersTab();
       if (tabTarget === 'shipping') renderShippingTab();
+      if (tabTarget === 'settings') populateStockReceiptRecipientsForm();
       if (tabTarget === 'users') renderUsersTab();
     });
   });
@@ -985,6 +987,102 @@ function renderShippingTab() {
       </tr>
     `;
   }).join('');
+}
+
+function normalizeWhatsAppPhone(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.startsWith('0')) digits = `213${digits.slice(1)}`;
+  return digits;
+}
+
+function populateStockReceiptRecipientsForm() {
+  const card = document.getElementById('stock-receipt-settings-card');
+  if (!card) return;
+
+  const isSuperAdmin = getCurrentAdminUser()?.id === 'usr_super_admin';
+  card.hidden = !isSuperAdmin;
+  if (!isSuperAdmin) return;
+
+  const recipients = Store.getStockNotificationSettings().recipients || [];
+  card.querySelectorAll('.stock-recipient-field').forEach((row, index) => {
+    const recipient = recipients[index] || {};
+    row.dataset.recipientId = recipient.id || `recipient_${index + 1}`;
+    const nameInput = row.querySelector('.stock-recipient-name');
+    const phoneInput = row.querySelector('.stock-recipient-phone');
+    if (nameInput && document.activeElement !== nameInput) nameInput.value = recipient.name || '';
+    if (phoneInput && document.activeElement !== phoneInput) phoneInput.value = recipient.phone || '';
+  });
+}
+
+function setupStockReceiptRecipientsForm() {
+  const form = document.getElementById('stock-receipt-recipients-form');
+  const card = document.getElementById('stock-receipt-settings-card');
+  const status = document.getElementById('stock-recipients-status');
+  const saveButton = document.getElementById('save-stock-recipients-btn');
+  if (!form || !card) return;
+
+  populateStockReceiptRecipientsForm();
+  if (form.dataset.bound) return;
+  form.dataset.bound = 'true';
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (getCurrentAdminUser()?.id !== 'usr_super_admin') {
+      if (status) status.textContent = 'هذه الإعدادات متاحة للمدير العام فقط.';
+      return;
+    }
+
+    const recipients = [];
+    let hasIncompleteRow = false;
+    form.querySelectorAll('.stock-recipient-field').forEach((row, index) => {
+      const name = row.querySelector('.stock-recipient-name')?.value.trim() || '';
+      const phoneValue = row.querySelector('.stock-recipient-phone')?.value.trim() || '';
+      if (!name && !phoneValue) return;
+      if (!name || !phoneValue) {
+        hasIncompleteRow = true;
+        return;
+      }
+      recipients.push({
+        id: row.dataset.recipientId || `recipient_${index + 1}`,
+        name,
+        phone: normalizeWhatsAppPhone(phoneValue)
+      });
+    });
+
+    const uniquePhones = new Set(recipients.map(recipient => recipient.phone));
+    if (hasIncompleteRow) {
+      if (status) status.textContent = 'أكمل الاسم والرقم في كل سطر مستخدم.';
+      return;
+    }
+    if (recipients.length < 3 || recipients.length > 4) {
+      if (status) status.textContent = 'يجب تحديد 3 مستلمين على الأقل و4 كحد أقصى.';
+      return;
+    }
+    if (recipients.some(recipient => recipient.phone.length < 8 || recipient.phone.length > 15)) {
+      if (status) status.textContent = 'تحقق من أرقام واتساب واكتبها مع رمز الدولة.';
+      return;
+    }
+    if (uniquePhones.size !== recipients.length) {
+      if (status) status.textContent = 'لا يمكن تكرار رقم واتساب نفسه.';
+      return;
+    }
+
+    if (saveButton) saveButton.disabled = true;
+    if (status) status.textContent = 'جاري حفظ القائمة في التخزين السحابي...';
+    try {
+      const saved = await Store.saveStockNotificationSettings({ recipients });
+      if (!saved) throw new Error('Cloud save failed');
+      if (status) status.textContent = 'تم حفظ قائمة المستلمين وتفعيلها في المخزن.';
+      populateStockReceiptRecipientsForm();
+    } catch (error) {
+      if (status) status.textContent = 'تعذر حفظ القائمة. تحقق من الاتصال ثم حاول مجدداً.';
+    } finally {
+      if (saveButton) saveButton.disabled = false;
+    }
+  });
+
+  window.addEventListener('joulane:stockNotificationSettingsUpdated', populateStockReceiptRecipientsForm);
 }
 
 /* ==========================================================================

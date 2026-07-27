@@ -153,6 +153,15 @@ export const SupabaseManager = {
         return !error && data === true;
       }
 
+      if (key === 'stock_notification_settings') {
+        const { data, error } = await supabaseClient.rpc('joulane_stock_notification_settings_save', {
+          p_token: secureToken,
+          p_data: dataPayload
+        });
+        if (error) console.error('Stock notification settings save failed:', error);
+        return !error && data === true;
+      }
+
       const { data, error } = await supabaseClient.rpc('joulane_secure_write', {
         p_token: secureToken,
         p_id: key,
@@ -162,6 +171,42 @@ export const SupabaseManager = {
       return !error && data === true;
     } catch (error) {
       console.error(`Secure write exception for ${key}:`, error);
+      return false;
+    }
+  },
+
+  async recordStockMovement(productId, newQuantity, movement) {
+    if (!supabaseClient || !secureToken) return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_stock_movement', {
+        p_token: secureToken,
+        p_product_id: productId,
+        p_new_qty: newQuantity,
+        p_log: movement
+      });
+      if (error) {
+        if (error.code === 'PGRST202' || /joulane_stock_movement/i.test(error.message || '')) return null;
+        console.error('Atomic stock movement failed:', error);
+        return false;
+      }
+      return data === true;
+    } catch (error) {
+      console.error('Atomic stock movement exception:', error);
+      return false;
+    }
+  },
+
+  async markStockReceiptDelivery(delivery) {
+    if (!supabaseClient || !secureToken) return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_receipt_delivery_mark', {
+        p_token: secureToken,
+        p_delivery: delivery
+      });
+      if (error) console.error('Stock receipt delivery mark failed:', error);
+      return !error && data === true;
+    } catch (error) {
+      console.error('Stock receipt delivery mark exception:', error);
       return false;
     }
   },

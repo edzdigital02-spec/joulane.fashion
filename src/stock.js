@@ -1,8 +1,86 @@
 import { Store } from './store.js';
+import {
+  canShareStockReceiptFiles,
+  downloadStockReceipt,
+  getStockReceiptReference,
+  shareStockReceipt
+} from './stockReceipt.js';
 
 let isStockAuth = false;
 let activeProductForEntry = null;
 let currentEntryMode = 'add'; // 'add', 'remove', 'set'
+let activeMovementForReceipt = null;
+let activeStockBatch = null;
+
+const STOCK_BATCH_SESSION_KEY = 'joulane_active_stock_batch';
+
+function readActiveStockBatch() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(STOCK_BATCH_SESSION_KEY) || 'null');
+    return parsed && Array.isArray(parsed.movements) && parsed.movements.length ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function persistActiveStockBatch() {
+  if (!activeStockBatch) {
+    sessionStorage.removeItem(STOCK_BATCH_SESSION_KEY);
+    return;
+  }
+  sessionStorage.setItem(STOCK_BATCH_SESSION_KEY, JSON.stringify(activeStockBatch));
+}
+
+function getBatchMovementDelta(movement) {
+  const oldQuantity = Number(movement?.oldQty);
+  const newQuantity = Number(movement?.newQty);
+  if (Number.isFinite(oldQuantity) && Number.isFinite(newQuantity)) return newQuantity - oldQuantity;
+  const amount = Number(movement?.amount) || 0;
+  return movement?.type === 'remove' ? -amount : movement?.type === 'add' ? amount : 0;
+}
+
+function getStockBatchStats(batch) {
+  const movements = Array.isArray(batch?.movements) ? batch.movements : [];
+  return {
+    modelCount: new Set(movements.map(movement => movement.productId || movement.productName)).size,
+    movementCount: movements.length,
+    cartonCount: movements.reduce((total, movement) => total + Math.abs(getBatchMovementDelta(movement)), 0)
+  };
+}
+
+function createStockBatchReceipt(batch) {
+  return {
+    ...batch,
+    isBatchReceipt: true,
+    timestamp: batch.completedAt || batch.updatedAt || batch.createdAt,
+    movements: Array.isArray(batch.movements) ? batch.movements : []
+  };
+}
+
+const STOCK_REASONS = {
+  add: [
+    ['factory_shipment', 'شحنة من المصنع'],
+    ['supplier_purchase', 'شراء من مورد'],
+    ['customer_return', 'مرتجع من زبون'],
+    ['inbound_correction', 'تصحيح حركة واردة']
+  ],
+  remove: [
+    ['customer_order', 'طلب زبون أو محل'],
+    ['store_transfer', 'تحويل إلى محل أو نقطة بيع'],
+    ['damaged_goods', 'تالف أو غير صالح للبيع'],
+    ['sample', 'عينة أو عرض'],
+    ['outbound_correction', 'تصحيح حركة صادرة']
+  ],
+  set: [
+    ['physical_count', 'جرد فعلي للمخزن'],
+    ['opening_balance', 'تثبيت رصيد افتتاحي'],
+    ['inventory_reconciliation', 'مطابقة وتصحيح الرصيد']
+  ]
+};
+
+const STOCK_REASON_LABELS = Object.fromEntries(
+  Object.values(STOCK_REASONS).flat().map(([value, label]) => [value, label])
+);
 
 export function initStockPanel(refreshMainStoreFn) {
   const stockModal = document.getElementById('stock-modal');
@@ -17,17 +95,24 @@ export function initStockPanel(refreshMainStoreFn) {
   // Tabs
   const tabBtnItems = document.getElementById('stock-tab-btn-items');
   const tabBtnLogs = document.getElementById('stock-tab-btn-logs');
+  const tabBtnInsights = document.getElementById('stock-tab-btn-insights');
   const tabSecItems = document.getElementById('stock-tab-items-sec');
   const tabSecLogs = document.getElementById('stock-tab-logs-sec');
+  const tabSecInsights = document.getElementById('stock-tab-insights-sec');
 
   // Filters & Grid
   const searchInput = document.getElementById('stock-search-input');
   const categoryFilter = document.getElementById('stock-cat-filter');
   const statusFilter = document.getElementById('stock-status-filter');
   const gridContainer = document.getElementById('stock-items-grid');
+  const activeBatchBar = document.getElementById('stock-active-batch-bar');
+  const activeBatchSummary = document.getElementById('stock-active-batch-summary');
+  const finishActiveBatchBtn = document.getElementById('stock-finish-active-batch-btn');
 
   // Logs
   const logsSearchInput = document.getElementById('stock-logs-search');
+  const logsTypeFilter = document.getElementById('stock-logs-type-filter');
+  const logsPeriodFilter = document.getElementById('stock-logs-period-filter');
   const logsListContainer = document.getElementById('stock-logs-list');
   const clearLogsBtn = document.getElementById('stock-clear-logs-btn');
 
@@ -41,6 +126,17 @@ export function initStockPanel(refreshMainStoreFn) {
   const entryCode = document.getElementById('stock-entry-prod-code');
   const entryTitle = document.getElementById('stock-entry-prod-title');
   const entryQtyInput = document.getElementById('stock-entry-qty-input');
+  const entryQtyDecBtn = document.getElementById('stock-entry-qty-dec');
+  const entryQtyIncBtn = document.getElementById('stock-entry-qty-inc');
+  const entryQtyLabel = document.getElementById('stock-entry-qty-label');
+  const entryQtyHelp = document.getElementById('stock-entry-qty-help');
+  const entryReasonSelect = document.getElementById('stock-entry-reason');
+  const entryOrderPickerGroup = document.getElementById('stock-entry-order-picker-group');
+  const entryOrderPicker = document.getElementById('stock-entry-order-picker');
+  const entryCustomerGroup = document.getElementById('stock-entry-customer-group');
+  const entryCustomerInput = document.getElementById('stock-entry-customer');
+  const entryOrderRefGroup = document.getElementById('stock-entry-order-ref-group');
+  const entryOrderRefInput = document.getElementById('stock-entry-order-ref');
   const entryOperatorInput = document.getElementById('stock-entry-operator-input');
   const entryNoteInput = document.getElementById('stock-entry-note-input');
 
@@ -58,8 +154,39 @@ export function initStockPanel(refreshMainStoreFn) {
   const confirmNewQty = document.getElementById('confirm-modal-new-qty');
   const confirmDate = document.getElementById('confirm-modal-date');
   const confirmOperator = document.getElementById('confirm-modal-operator');
+  const confirmContextRow = document.getElementById('confirm-modal-context-row');
+  const confirmContext = document.getElementById('confirm-modal-context');
+
+  // Active shipment session
+  const batchSubmodal = document.getElementById('stock-batch-submodal');
+  const batchContinueBtn = document.getElementById('stock-batch-continue-btn');
+  const batchFinishBtn = document.getElementById('stock-batch-finish-btn');
+  const batchLastImg = document.getElementById('stock-batch-last-img');
+  const batchLastName = document.getElementById('stock-batch-last-name');
+  const batchLastChange = document.getElementById('stock-batch-last-change');
+  const batchModelCount = document.getElementById('stock-batch-model-count');
+  const batchMovementCount = document.getElementById('stock-batch-movement-count');
+  const batchCartonCount = document.getElementById('stock-batch-carton-count');
+
+  // Receipt Actions
+  const receiptSubmodal = document.getElementById('stock-receipt-submodal');
+  const receiptReference = document.getElementById('stock-receipt-reference-value');
+  const receiptStatus = document.getElementById('stock-receipt-status');
+  const receiptDistribution = document.getElementById('stock-receipt-distribution');
+  const receiptProgress = document.getElementById('stock-receipt-progress');
+  const receiptRecipientsList = document.getElementById('stock-receipt-recipients-list');
+  const shareReceiptBtn = document.getElementById('share-stock-receipt-btn');
+  const downloadReceiptBtn = document.getElementById('download-stock-receipt-btn');
+  const closeReceiptBtn = document.getElementById('close-stock-receipt-btn');
+  const receiptTitle = document.getElementById('stock-receipt-title');
+  const receiptDescription = document.getElementById('stock-receipt-description');
+  const receiptBatchSummary = document.getElementById('stock-receipt-batch-summary');
+  const receiptModelCount = document.getElementById('stock-receipt-model-count');
+  const receiptMovementCount = document.getElementById('stock-receipt-movement-count');
+  const receiptCartonCount = document.getElementById('stock-receipt-carton-count');
 
   if (!stockModal) return;
+  activeStockBatch = readActiveStockBatch();
 
   // Check URL Hash (#stock)
   if (window.location.hash === '#stock') {
@@ -104,11 +231,13 @@ export function initStockPanel(refreshMainStoreFn) {
 
   // Tabs Switching
   if (tabBtnItems && tabBtnLogs) {
+    const activateTab = (activeButton, activeSection) => {
+      [tabBtnItems, tabBtnLogs, tabBtnInsights].forEach(button => button?.classList.toggle('active', button === activeButton));
+      [tabSecItems, tabSecLogs, tabSecInsights].forEach(section => section?.classList.toggle('hidden', section !== activeSection));
+    };
+
     tabBtnItems.addEventListener('click', () => {
-      tabBtnItems.classList.add('active');
-      tabBtnLogs.classList.remove('active');
-      if (tabSecItems) tabSecItems.classList.remove('hidden');
-      if (tabSecLogs) tabSecLogs.classList.add('hidden');
+      activateTab(tabBtnItems, tabSecItems);
       renderStockDashboard();
     });
 
@@ -117,11 +246,17 @@ export function initStockPanel(refreshMainStoreFn) {
         alert('عذراً! حسابك لا يملك صلاحية مشاهدة سجل حركة المخزن.');
         return;
       }
-      tabBtnLogs.classList.add('active');
-      tabBtnItems.classList.remove('active');
-      if (tabSecLogs) tabSecLogs.classList.remove('hidden');
-      if (tabSecItems) tabSecItems.classList.add('hidden');
+      activateTab(tabBtnLogs, tabSecLogs);
       renderStockLogs();
+    });
+
+    tabBtnInsights?.addEventListener('click', () => {
+      if (!getCurrentUserPermissions().stockViewLogs) {
+        alert('عذراً! حسابك لا يملك صلاحية مشاهدة إحصائيات حركة المخزن.');
+        return;
+      }
+      activateTab(tabBtnInsights, tabSecInsights);
+      renderStockInsights();
     });
   }
 
@@ -161,19 +296,106 @@ export function initStockPanel(refreshMainStoreFn) {
     }
   }
 
+  function syncActiveBatchForCurrentUser() {
+    const currentUser = getCurrentStockUser();
+    if (!activeStockBatch) return;
+    if (activeStockBatch.operatorId && currentUser?.id && activeStockBatch.operatorId !== currentUser.id) {
+      activeStockBatch = null;
+      persistActiveStockBatch();
+    }
+  }
+
+  function renderActiveStockBatchBar() {
+    if (!activeBatchBar) return;
+    const hasBatch = !!activeStockBatch?.movements?.length;
+    activeBatchBar.classList.toggle('hidden', !hasBatch);
+    if (!hasBatch) return;
+
+    const stats = getStockBatchStats(activeStockBatch);
+    if (activeBatchSummary) {
+      activeBatchSummary.textContent = activeStockBatch.status === 'finalized'
+        ? `الوصل جاهز - ${stats.modelCount} موديلات - ${stats.cartonCount} كرطون`
+        : `${stats.modelCount} موديلات - ${stats.movementCount} حركات - ${stats.cartonCount} كرطون`;
+    }
+    if (finishActiveBatchBtn) {
+      finishActiveBatchBtn.innerHTML = activeStockBatch.status === 'finalized'
+        ? '<i class="fa-solid fa-file-pdf"></i> فتح الوصل المجمع'
+        : '<i class="fa-solid fa-file-circle-check"></i> انتهيت وأنشئ الوصل';
+    }
+  }
+
+  function addMovementToActiveBatch(movement) {
+    const currentUser = getCurrentStockUser();
+    if (!activeStockBatch || activeStockBatch.status === 'finalized') {
+      const now = new Date().toISOString();
+      activeStockBatch = {
+        id: `batch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        status: 'collecting',
+        createdAt: now,
+        updatedAt: now,
+        operatorId: currentUser?.id || movement.operatorId || '',
+        operator: currentUser?.name || movement.operator || 'مسؤول المخزن',
+        movements: []
+      };
+    }
+    activeStockBatch.movements.push(movement);
+    activeStockBatch.updatedAt = new Date().toISOString();
+    persistActiveStockBatch();
+    renderActiveStockBatchBar();
+  }
+
+  function showBatchDecision(movement) {
+    if (!activeStockBatch || !batchSubmodal) return;
+    const stats = getStockBatchStats(activeStockBatch);
+    const delta = getBatchMovementDelta(movement);
+    if (batchLastImg) batchLastImg.src = movement.productImg || '/images/303-3.PNG';
+    if (batchLastName) batchLastName.textContent = movement.productName || 'منتج';
+    if (batchLastChange) {
+      batchLastChange.textContent = `${delta > 0 ? '+' : ''}${delta} كرطون - الرصيد ${movement.oldQty} ← ${movement.newQty}`;
+      batchLastChange.className = delta > 0 ? 'is-inbound' : delta < 0 ? 'is-outbound' : 'is-neutral';
+    }
+    if (batchModelCount) batchModelCount.textContent = stats.modelCount;
+    if (batchMovementCount) batchMovementCount.textContent = stats.movementCount;
+    if (batchCartonCount) batchCartonCount.textContent = stats.cartonCount;
+    batchSubmodal.classList.add('active');
+  }
+
+  function finalizeActiveStockBatch() {
+    if (!activeStockBatch?.movements?.length) return;
+    if (activeStockBatch.status !== 'finalized') {
+      activeStockBatch.status = 'finalized';
+      activeStockBatch.completedAt = new Date().toISOString();
+      activeStockBatch.updatedAt = activeStockBatch.completedAt;
+      persistActiveStockBatch();
+    }
+    batchSubmodal?.classList.remove('active');
+    renderActiveStockBatchBar();
+    window.dispatchEvent(new CustomEvent('joulane:showToast', {
+      detail: 'تم تحديث المخزون وتجميع جميع الموديلات في وصل واحد.'
+    }));
+    openReceiptActions(createStockBatchReceipt(activeStockBatch));
+  }
+
   function showStockDashboard() {
+    syncActiveBatchForCurrentUser();
     isStockAuth = true;
     sessionStorage.setItem('joulane_stock_auth', 'true');
     if (loginSec) loginSec.classList.add('hidden');
     if (contentSec) contentSec.classList.remove('hidden');
     const permissions = getCurrentUserPermissions();
     if (tabBtnLogs) tabBtnLogs.hidden = !permissions.stockViewLogs;
+    if (tabBtnInsights) tabBtnInsights.hidden = !permissions.stockViewLogs;
     if (!permissions.stockViewLogs && tabBtnLogs?.classList.contains('active')) {
       tabBtnItems?.click();
     }
     populateStockCategoriesFilter();
     renderStockDashboard();
     renderStockLogs();
+    renderStockInsights();
+    renderActiveStockBatchBar();
+    if (activeStockBatch?.status === 'finalized') {
+      setTimeout(() => openReceiptActions(createStockBatchReceipt(activeStockBatch)), 80);
+    }
   }
 
   if (loginForm) {
@@ -208,6 +430,18 @@ export function initStockPanel(refreshMainStoreFn) {
   if (categoryFilter) categoryFilter.addEventListener('change', () => renderStockDashboard());
   if (statusFilter) statusFilter.addEventListener('change', () => renderStockDashboard());
   if (logsSearchInput) logsSearchInput.addEventListener('input', () => renderStockLogs());
+  if (logsTypeFilter) logsTypeFilter.addEventListener('change', () => renderStockLogs());
+  if (logsPeriodFilter) logsPeriodFilter.addEventListener('change', () => renderStockLogs());
+  batchContinueBtn?.addEventListener('click', () => {
+    batchSubmodal?.classList.remove('active');
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.focus();
+    }
+    renderStockDashboard();
+  });
+  batchFinishBtn?.addEventListener('click', finalizeActiveStockBatch);
+  finishActiveBatchBtn?.addEventListener('click', finalizeActiveStockBatch);
 
   if (clearLogsBtn) {
     clearLogsBtn.addEventListener('click', () => {
@@ -232,6 +466,7 @@ export function initStockPanel(refreshMainStoreFn) {
     if (stockModal.classList.contains('active')) {
       renderStockDashboard();
       renderStockLogs();
+      renderStockInsights();
     }
   });
 
@@ -397,6 +632,10 @@ export function initStockPanel(refreshMainStoreFn) {
   }
 
   function openStockEntryModal(product) {
+    if (activeStockBatch?.status === 'finalized') {
+      openReceiptActions(createStockBatchReceipt(activeStockBatch));
+      return;
+    }
     activeProductForEntry = product;
     const perms = getCurrentUserPermissions();
 
@@ -415,7 +654,7 @@ export function initStockPanel(refreshMainStoreFn) {
     if (entryCode) entryCode.textContent = 'كود: ' + (product.name?.ar || product.name || '').replace('موديل ', '');
     if (entryTitle) entryTitle.textContent = product.name?.ar || product.name || 'منتج';
 
-    if (entryQtyInput) entryQtyInput.value = '10';
+    if (entryQtyInput) entryQtyInput.value = '1';
 
     let savedOperator = '';
     try {
@@ -426,11 +665,15 @@ export function initStockPanel(refreshMainStoreFn) {
       }
     } catch(e){}
 
-    if (!savedOperator) savedOperator = localStorage.getItem('joulane_last_operator') || '';
+    if (!savedOperator) savedOperator = 'مسؤول المخزن';
     if (entryOperatorInput) entryOperatorInput.value = savedOperator;
     if (entryNoteInput) entryNoteInput.value = '';
+    if (entryCustomerInput) entryCustomerInput.value = '';
+    if (entryOrderRefInput) entryOrderRefInput.value = '';
+    if (entryOrderPicker) entryOrderPicker.value = '';
 
     updateModeButtons();
+    updateEntryContext();
     updateLiveCalculation();
 
     if (entrySubmodal) entrySubmodal.classList.add('active');
@@ -449,6 +692,7 @@ export function initStockPanel(refreshMainStoreFn) {
     btn.addEventListener('click', (e) => {
       currentEntryMode = e.currentTarget.dataset.mode || 'add';
       updateModeButtons();
+      updateEntryContext();
       updateLiveCalculation();
     });
   });
@@ -478,24 +722,115 @@ export function initStockPanel(refreshMainStoreFn) {
     });
   }
 
-  // Quick Pills (+1, +5, +10, +20, +50)
-  document.querySelectorAll('.btn-stock-pill').forEach(pill => {
-    pill.addEventListener('click', (e) => {
-      const val = parseInt(e.currentTarget.dataset.pill, 10) || 10;
-      if (entryQtyInput) {
-        entryQtyInput.value = val;
-        updateLiveCalculation();
-      }
-    });
-  });
-
   if (entryQtyInput) {
     entryQtyInput.addEventListener('input', updateLiveCalculation);
+  }
+  entryQtyDecBtn?.addEventListener('click', () => stepEntryQuantity(-1));
+  entryQtyIncBtn?.addEventListener('click', () => stepEntryQuantity(1));
+  entryReasonSelect?.addEventListener('change', updateEntryContextFields);
+  entryOrderPicker?.addEventListener('change', applySelectedOrder);
+
+  function stepEntryQuantity(direction) {
+    if (!entryQtyInput) return;
+    const minimum = currentEntryMode === 'set' ? 0 : 1;
+    const current = parseInt(entryQtyInput.value, 10);
+    entryQtyInput.value = String(Math.min(9999, Math.max(minimum, (Number.isFinite(current) ? current : minimum) + direction)));
+    updateLiveCalculation();
+  }
+
+  function updateEntryContext() {
+    if (!entryReasonSelect) return;
+    const reasons = STOCK_REASONS[currentEntryMode] || STOCK_REASONS.add;
+    entryReasonSelect.innerHTML = reasons.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+
+    if (entryQtyInput) {
+      entryQtyInput.min = currentEntryMode === 'set' ? '0' : '1';
+      if (currentEntryMode !== 'set' && parseInt(entryQtyInput.value, 10) < 1) entryQtyInput.value = '1';
+    }
+    if (entryQtyLabel) {
+      entryQtyLabel.textContent = currentEntryMode === 'add'
+        ? 'عدد الكراطين المستلمة'
+        : currentEntryMode === 'remove'
+          ? 'عدد الكراطين المصروفة'
+          : 'الرصيد الفعلي بعد الجرد';
+    }
+    if (entryQtyHelp) {
+      entryQtyHelp.textContent = currentEntryMode === 'set'
+        ? 'اكتب العدد الموجود فعلياً في المخزن بعد انتهاء الجرد.'
+        : 'يمكنك الكتابة مباشرة أو استخدام زري الإنقاص والإضافة.';
+    }
+    updateEntryContextFields();
+  }
+
+  function updateEntryContextFields() {
+    const isCustomerOrder = currentEntryMode === 'remove' && entryReasonSelect?.value === 'customer_order';
+    entryOrderPickerGroup?.classList.toggle('hidden', !isCustomerOrder);
+    entryCustomerGroup?.classList.toggle('hidden', !isCustomerOrder);
+    entryOrderRefGroup?.classList.toggle('hidden', !isCustomerOrder);
+    if (entryCustomerInput) entryCustomerInput.required = isCustomerOrder;
+    if (entryOrderRefInput) entryOrderRefInput.required = isCustomerOrder;
+    if (isCustomerOrder) populateConfirmedOrderPicker();
+  }
+
+  function populateConfirmedOrderPicker() {
+    if (!entryOrderPicker || !activeProductForEntry) return;
+    const currentSelection = entryOrderPicker.value;
+    entryOrderPicker.replaceChildren();
+    const manualOption = document.createElement('option');
+    manualOption.value = '';
+    manualOption.textContent = 'إدخال بيانات الطلب يدوياً';
+    entryOrderPicker.appendChild(manualOption);
+
+    const eligibleOrders = Store.getOrders().filter(order => {
+      const status = String(order.status || '').toLowerCase();
+      return status === 'confirmed'
+        && getOrderItemForProduct(order, activeProductForEntry)
+        && !isDuplicateOrderMovement(order.id, activeProductForEntry.id);
+    });
+
+    eligibleOrders.forEach(order => {
+      const item = getOrderItemForProduct(order, activeProductForEntry);
+      const option = document.createElement('option');
+      option.value = order.id;
+      option.textContent = `#${order.id} - ${order.customerName || 'زبون'} - ${Number(item?.seriesQty) || 1} كرطون`;
+      entryOrderPicker.appendChild(option);
+    });
+
+    if (eligibleOrders.some(order => order.id === currentSelection)) entryOrderPicker.value = currentSelection;
+  }
+
+  function applySelectedOrder() {
+    if (!entryOrderPicker?.value) {
+      if (entryCustomerInput) entryCustomerInput.value = '';
+      if (entryOrderRefInput) entryOrderRefInput.value = '';
+      return;
+    }
+    if (!activeProductForEntry) return;
+    const order = Store.getOrders().find(item => item.id === entryOrderPicker.value);
+    if (!order) return;
+    const orderItem = getOrderItemForProduct(order, activeProductForEntry);
+    if (entryCustomerInput) entryCustomerInput.value = order.customerName || '';
+    if (entryOrderRefInput) entryOrderRefInput.value = order.id || '';
+    if (entryQtyInput && orderItem) entryQtyInput.value = String(Math.max(1, Number(orderItem.seriesQty) || 1));
+    updateLiveCalculation();
+  }
+
+  function getOrderItemForProduct(order, product) {
+    const items = Array.isArray(order?.items) ? order.items : [];
+    const productName = String(product?.name?.ar || product?.name || '').trim().toLowerCase();
+    const exactItem = items.find(item => String(item.productId || '') === String(product?.id || ''));
+    if (exactItem) return exactItem;
+    const legacyItem = items.find(item => String(item.nameAr || '').trim().toLowerCase() === productName);
+    if (legacyItem) return legacyItem;
+    if (!items.length && String(order?.productName || '').trim().toLowerCase() === productName) {
+      return { seriesQty: parseInt(order.seriesQty, 10) || 1 };
+    }
+    return null;
   }
 
   function updateLiveCalculation() {
     if (!activeProductForEntry) return;
-    const currentQty = typeof activeProductForEntry.seriesQty === 'number' ? activeProductForEntry.seriesQty : (activeProductForEntry.stockQty || 15);
+    const currentQty = getProductStock(activeProductForEntry);
     const amount = parseInt(entryQtyInput ? entryQtyInput.value : 0, 10) || 0;
 
     let finalQty = currentQty;
@@ -506,7 +841,7 @@ export function initStockPanel(refreshMainStoreFn) {
       changeText = '+' + amount;
       if (calcChange) calcChange.style.color = '#22c55e';
     } else if (currentEntryMode === 'remove') {
-      finalQty = Math.max(0, currentQty - amount);
+      finalQty = currentQty - amount;
       changeText = '-' + amount;
       if (calcChange) calcChange.style.color = '#ef4444';
     } else if (currentEntryMode === 'set') {
@@ -541,11 +876,9 @@ export function initStockPanel(refreshMainStoreFn) {
 
       const operator = entryOperatorInput ? entryOperatorInput.value.trim() : '';
       if (!operator) {
-        alert('الرجاء كتابة اسم المسؤول أو العامل الذي قام بعملية الإدخال!');
-        if (entryOperatorInput) entryOperatorInput.focus();
+        alert('تعذر تحديد حساب العامل الحالي. أعد تسجيل الدخول إلى لوحة المخزن.');
         return;
       }
-      localStorage.setItem('joulane_last_operator', operator);
 
       const amount = parseInt(entryQtyInput ? entryQtyInput.value : 0, 10) || 0;
       if (amount <= 0 && currentEntryMode !== 'set') {
@@ -553,20 +886,39 @@ export function initStockPanel(refreshMainStoreFn) {
         return;
       }
 
+      const currentQty = getProductStock(activeProductForEntry);
+      if (currentEntryMode === 'remove' && amount > currentQty) {
+        alert(`لا يمكن صرف ${amount} كرطون. الرصيد المتوفر لهذا الموديل هو ${currentQty} فقط.`);
+        entryQtyInput?.focus();
+        return;
+      }
+
+      const reason = entryReasonSelect?.value || '';
+      const customerName = entryCustomerInput?.value.trim() || '';
+      const orderReference = normalizeOrderReference(entryOrderRefInput?.value || '');
+      if (reason === 'customer_order' && (!customerName || !orderReference)) {
+        alert('أدخل اسم الزبون أو المحل ومرجع الطلب حتى يكون الصرف قابلاً للتتبع.');
+        (!customerName ? entryCustomerInput : entryOrderRefInput)?.focus();
+        return;
+      }
+      if (reason === 'customer_order' && isDuplicateOrderMovement(orderReference, activeProductForEntry.id)) {
+        alert(`تم تسجيل صرف سابق للطلب ${orderReference} على هذا الموديل. راجع سجل الحركات قبل إعادة الصرف.`);
+        return;
+      }
+
       // Populate Confirm Modal
-      const currentQty = typeof activeProductForEntry.seriesQty === 'number' ? activeProductForEntry.seriesQty : 15;
       let finalQty = currentQty;
       let actionText = '';
 
       if (currentEntryMode === 'add') {
         finalQty = currentQty + amount;
-        actionText = `+${amount} كراطين (إضافة شحنة جديدة)`;
+        actionText = `+${amount} كرطون (${STOCK_REASON_LABELS[reason] || 'استلام بضاعة'})`;
       } else if (currentEntryMode === 'remove') {
-        finalQty = Math.max(0, currentQty - amount);
-        actionText = `-${amount} كراطين (سحب من المخزون)`;
+        finalQty = currentQty - amount;
+        actionText = `-${amount} كرطون (${STOCK_REASON_LABELS[reason] || 'صرف بضاعة'})`;
       } else if (currentEntryMode === 'set') {
         finalQty = Math.max(0, amount);
-        actionText = `تعديل مباشر إلى ${amount} كرطون`;
+        actionText = `تثبيت الرصيد عند ${amount} كرطون (${STOCK_REASON_LABELS[reason] || 'تسوية جرد'})`;
       }
 
       const now = new Date();
@@ -577,6 +929,12 @@ export function initStockPanel(refreshMainStoreFn) {
       if (confirmNewQty) confirmNewQty.textContent = finalQty + ' كرطون';
       if (confirmDate) confirmDate.textContent = dateStr;
       if (confirmOperator) confirmOperator.textContent = operator;
+      const contextParts = [];
+      if (customerName) contextParts.push(customerName);
+      if (orderReference) contextParts.push(`#${orderReference}`);
+      if (entryNoteInput?.value.trim()) contextParts.push(entryNoteInput.value.trim());
+      if (confirmContext) confirmContext.textContent = contextParts.join(' - ');
+      confirmContextRow?.classList.toggle('hidden', contextParts.length === 0);
 
       // Show Confirm Submodal
       closeStockEntryModal();
@@ -593,7 +951,7 @@ export function initStockPanel(refreshMainStoreFn) {
 
   // Final Confirmation Submit
   if (confirmSubmitBtn) {
-    confirmSubmitBtn.addEventListener('click', () => {
+    confirmSubmitBtn.addEventListener('click', async () => {
       if (!activeProductForEntry) return;
 
       const perms = getCurrentUserPermissions();
@@ -610,23 +968,35 @@ export function initStockPanel(refreshMainStoreFn) {
         return;
       }
 
-      const currentQty = typeof activeProductForEntry.seriesQty === 'number' ? activeProductForEntry.seriesQty : 15;
+      const currentQty = getProductStock(activeProductForEntry);
       const amount = parseInt(entryQtyInput ? entryQtyInput.value : 0, 10) || 0;
       const operator = entryOperatorInput ? entryOperatorInput.value.trim() : 'مسؤول المخزن';
       const note = entryNoteInput ? entryNoteInput.value.trim() : '';
+      const reason = entryReasonSelect?.value || '';
+      const customerName = entryCustomerInput?.value.trim() || '';
+      const orderReference = normalizeOrderReference(entryOrderRefInput?.value || '');
+
+      if (currentEntryMode === 'remove' && amount > currentQty) {
+        alert('تغير الرصيد ولم تعد الكمية المطلوبة متوفرة. راجع الحركة من جديد.');
+        confirmSubmodal?.classList.remove('active');
+        entrySubmodal?.classList.add('active');
+        updateLiveCalculation();
+        return;
+      }
+      if (reason === 'customer_order' && isDuplicateOrderMovement(orderReference, activeProductForEntry.id)) {
+        alert(`تم تسجيل صرف الطلب ${orderReference} مسبقاً لهذا الموديل.`);
+        confirmSubmodal?.classList.remove('active');
+        return;
+      }
 
       let finalQty = currentQty;
       if (currentEntryMode === 'add') finalQty = currentQty + amount;
-      else if (currentEntryMode === 'remove') finalQty = Math.max(0, currentQty - amount);
+      else if (currentEntryMode === 'remove') finalQty = currentQty - amount;
       else if (currentEntryMode === 'set') finalQty = Math.max(0, amount);
 
       const newStatus = finalQty === 0 ? 'out_of_stock' : (finalQty <= 5 ? 'low_stock' : 'in_stock');
 
-      // Update Product
-      Store.updateProduct(activeProductForEntry.id, { seriesQty: finalQty, stockStatus: newStatus });
-
-      // Record Log History
-      Store.addStockLog({
+      const movement = {
         productId: activeProductForEntry.id,
         productName: activeProductForEntry.name?.ar || activeProductForEntry.name || 'منتج',
         productImg: productImageUrl(activeProductForEntry),
@@ -635,18 +1005,247 @@ export function initStockPanel(refreshMainStoreFn) {
         oldQty: currentQty,
         newQty: finalQty,
         operator: operator,
-        note: note
-      });
+        operatorId: getCurrentStockUser()?.id || '',
+        reason,
+        reasonLabel: STOCK_REASON_LABELS[reason] || '',
+        customerName,
+        orderReference,
+        note,
+        source: reason === 'customer_order' ? 'customer_order' : 'manual_stock'
+      };
+
+      confirmSubmitBtn.disabled = true;
+      const originalButtonHtml = confirmSubmitBtn.innerHTML;
+      confirmSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جارٍ الحفظ...';
+      let savedMovement = null;
+      try {
+        savedMovement = await Store.recordStockMovement(activeProductForEntry.id, { seriesQty: finalQty, stockStatus: newStatus }, movement);
+      } finally {
+        confirmSubmitBtn.disabled = false;
+        confirmSubmitBtn.innerHTML = originalButtonHtml;
+      }
+
+      if (!savedMovement) {
+        alert('تعذر حفظ الحركة في التخزين السحابي. لم يتم اعتماد الحركة، تحقق من الاتصال ثم حاول مجدداً.');
+        return;
+      }
 
       if (confirmSubmodal) confirmSubmodal.classList.remove('active');
       activeProductForEntry = null;
 
       renderStockDashboard();
       renderStockLogs();
+      renderStockInsights();
 
       if (refreshMainStoreFn) refreshMainStoreFn();
-      window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: '✅ تم تأكيد وتسجيل شحنة المخزون بنجاح!' }));
+      addMovementToActiveBatch(savedMovement);
+      window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: 'تم حفظ الموديل ضمن الشحنة الجارية.' }));
+      showBatchDecision(savedMovement);
     });
+  }
+
+  function getReceiptDistributionState(movement) {
+    const recipients = Store.getStockNotificationSettings().recipients || [];
+    const reference = getStockReceiptReference(movement);
+    const deliveries = Store.getStockReceiptDeliveries().filter(delivery => (
+      delivery.receiptReference === reference && delivery.status === 'share_opened'
+    ));
+    const completedPhones = new Set(deliveries.map(delivery => String(delivery.recipientPhone || '')));
+    return {
+      recipients,
+      deliveries,
+      completedPhones,
+      nextRecipient: recipients.find(recipient => !completedPhones.has(String(recipient.phone || ''))) || null
+    };
+  }
+
+  function renderReceiptDistribution() {
+    if (!activeMovementForReceipt || !receiptDistribution || !receiptRecipientsList) return;
+    const state = getReceiptDistributionState(activeMovementForReceipt);
+    const completedCount = state.recipients.filter(recipient => state.completedPhones.has(String(recipient.phone || ''))).length;
+
+    receiptDistribution.classList.remove('hidden');
+    if (receiptProgress) receiptProgress.textContent = `${completedCount} / ${state.recipients.length}`;
+
+    if (state.recipients.length === 0) {
+      receiptRecipientsList.innerHTML = `
+        <div class="stock-receipt-empty-recipients">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span>لم يحدد المدير العام قائمة مستلمي الوصل بعد.</span>
+        </div>
+      `;
+      if (shareReceiptBtn) {
+        shareReceiptBtn.disabled = true;
+        shareReceiptBtn.innerHTML = '<i class="fa-brands fa-whatsapp"></i> المستلمون غير مضبوطين';
+      }
+      if (closeReceiptBtn) closeReceiptBtn.disabled = false;
+      return;
+    }
+
+    receiptRecipientsList.innerHTML = state.recipients.map((recipient, index) => {
+      const delivery = state.deliveries.find(item => String(item.recipientPhone || '') === String(recipient.phone || ''));
+      const isComplete = !!delivery;
+      const statusText = isComplete
+        ? `فُتحت المشاركة ${formatLogDate(delivery)}`
+        : index === completedCount ? 'المستلم التالي' : 'بانتظار دوره';
+      return `
+        <div class="stock-receipt-recipient ${isComplete ? 'is-complete' : ''} ${!isComplete && index === completedCount ? 'is-next' : ''}">
+          <span class="stock-receipt-recipient-state"><i class="fa-solid ${isComplete ? 'fa-check' : 'fa-clock'}"></i></span>
+          <div class="stock-receipt-recipient-info">
+            <strong>${escapeHtml(recipient.name || 'مستلم')}</strong>
+            <span dir="ltr">+${escapeHtml(recipient.phone || '')}</span>
+          </div>
+          <small>${escapeHtml(statusText)}</small>
+        </div>
+      `;
+    }).join('');
+
+    const allComplete = completedCount === state.recipients.length;
+    if (shareReceiptBtn) {
+      shareReceiptBtn.disabled = allComplete;
+      shareReceiptBtn.innerHTML = allComplete
+        ? '<i class="fa-solid fa-circle-check"></i> اكتملت قائمة المشاركة'
+        : `<i class="fa-brands fa-whatsapp"></i> مشاركة إلى ${escapeHtml(state.nextRecipient?.name || 'المستلم التالي')}`;
+    }
+    if (closeReceiptBtn) closeReceiptBtn.disabled = !allComplete;
+  }
+
+  async function openReceiptActions(movement) {
+    if (!movement || !receiptSubmodal) return;
+    await Store.initSupabase(null, { force: true });
+    activeMovementForReceipt = movement;
+    const isBatchReceipt = movement.isBatchReceipt && Array.isArray(movement.movements);
+    if (receiptTitle) receiptTitle.textContent = isBatchReceipt ? 'تم تحديث المخزون وإنشاء الوصل المجمع' : 'وصل حركة المخزون';
+    if (receiptDescription) {
+      receiptDescription.textContent = isBatchReceipt
+        ? 'تم جمع كل الموديلات التي أدخلتها في ملف PDF واحد منظم بالصور والتفاصيل.'
+        : 'يمكنك تنزيل وصل هذه الحركة أو مشاركته مع المستلمين المعتمدين.';
+    }
+    receiptBatchSummary?.classList.toggle('hidden', !isBatchReceipt);
+    if (isBatchReceipt) {
+      const stats = getStockBatchStats(movement);
+      if (receiptModelCount) receiptModelCount.textContent = stats.modelCount;
+      if (receiptMovementCount) receiptMovementCount.textContent = stats.movementCount;
+      if (receiptCartonCount) receiptCartonCount.textContent = stats.cartonCount;
+    }
+    if (receiptReference) receiptReference.textContent = getStockReceiptReference(movement);
+    if (receiptStatus) receiptStatus.textContent = '';
+    renderReceiptDistribution();
+    receiptSubmodal.classList.add('active');
+  }
+
+  function closeReceiptActions() {
+    const completedReceipt = activeMovementForReceipt;
+    if (completedReceipt?.isBatchReceipt) {
+      const state = getReceiptDistributionState(completedReceipt);
+      if (state.recipients.length && state.nextRecipient) return;
+      activeStockBatch = null;
+      persistActiveStockBatch();
+      renderActiveStockBatchBar();
+    }
+    receiptSubmodal?.classList.remove('active');
+    activeMovementForReceipt = null;
+    if (receiptStatus) receiptStatus.textContent = '';
+  }
+
+  closeReceiptBtn?.addEventListener('click', closeReceiptActions);
+
+  shareReceiptBtn?.addEventListener('click', async () => {
+    if (!activeMovementForReceipt) return;
+    const state = getReceiptDistributionState(activeMovementForReceipt);
+    const recipient = state.nextRecipient;
+    if (!recipient) return;
+    const fallbackWindow = canShareStockReceiptFiles() ? null : window.open('', '_blank');
+    setReceiptBusy(true, `جارٍ تجهيز الوصل إلى ${recipient.name}...`);
+    let shareOpened = false;
+    try {
+      const result = await shareStockReceipt(activeMovementForReceipt, fallbackWindow, recipient);
+      shareOpened = true;
+      const movementIds = activeMovementForReceipt.isBatchReceipt
+        ? activeMovementForReceipt.movements.map(movement => movement.id).filter(Boolean)
+        : [activeMovementForReceipt.id].filter(Boolean);
+      const marked = await Store.markStockReceiptDelivery({
+        movementId: movementIds[0] || '',
+        movementIds,
+        batchId: activeMovementForReceipt.isBatchReceipt ? activeMovementForReceipt.id : '',
+        receiptReference: result.reference,
+        recipientId: recipient.id,
+        recipientName: recipient.name,
+        recipientPhone: recipient.phone,
+        shareMethod: result.method
+      });
+      if (!marked) throw new Error('Could not record receipt sharing');
+      renderReceiptDistribution();
+      if (receiptStatus) {
+        receiptStatus.textContent = result.method === 'share'
+          ? `فُتحت المشاركة إلى ${recipient.name} وسُجلت العملية. تأكد من الإرسال داخل واتساب.`
+          : `فُتحت محادثة ${recipient.name}. أرفق ملف PDF الذي تم تنزيله ثم أرسله.`;
+      }
+    } catch (error) {
+      if (!shareOpened && fallbackWindow && !fallbackWindow.closed) fallbackWindow.close();
+      if (receiptStatus) {
+        if (error?.name === 'AbortError') {
+          receiptStatus.textContent = 'تم إلغاء المشاركة. لم تُحسب لهذا المستلم.';
+        } else if (shareOpened) {
+          receiptStatus.textContent = 'فُتحت المشاركة، لكن تعذر تسجيلها سحابياً. تحقق من الاتصال ثم أعد المحاولة.';
+        } else {
+          receiptStatus.textContent = 'تعذرت المشاركة. جرّب مرة أخرى من الهاتف.';
+        }
+      }
+    } finally {
+      setReceiptBusy(false);
+    }
+  });
+
+  downloadReceiptBtn?.addEventListener('click', async () => {
+    if (!activeMovementForReceipt) return;
+    setReceiptBusy(true, 'جارٍ تجهيز ملف PDF...');
+    try {
+      await downloadStockReceipt(activeMovementForReceipt);
+      if (receiptStatus) receiptStatus.textContent = 'تم تنزيل الوصل بنجاح.';
+    } catch (error) {
+      if (receiptStatus) receiptStatus.textContent = 'تعذر إنشاء الوصل. حاول مرة أخرى.';
+    } finally {
+      setReceiptBusy(false);
+    }
+  });
+
+  function setReceiptBusy(isBusy, message = '') {
+    [shareReceiptBtn, downloadReceiptBtn, closeReceiptBtn].forEach(button => {
+      if (button) button.disabled = isBusy;
+    });
+    if (receiptStatus && message) receiptStatus.textContent = message;
+    if (!isBusy) renderReceiptDistribution();
+  }
+
+  window.addEventListener('joulane:stockNotificationSettingsUpdated', renderReceiptDistribution);
+  window.addEventListener('joulane:stockReceiptDeliveriesUpdated', renderReceiptDistribution);
+
+  function getCurrentStockUser() {
+    try {
+      return JSON.parse(sessionStorage.getItem('joulane_current_stock_user') || 'null');
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function getProductStock(product) {
+    if (typeof product?.seriesQty === 'number') return product.seriesQty;
+    if (typeof product?.stockQty === 'number') return product.stockQty;
+    return 0;
+  }
+
+  function normalizeOrderReference(value) {
+    return value.trim().replace(/^#/, '').toUpperCase();
+  }
+
+  function isDuplicateOrderMovement(orderReference, productId) {
+    if (!orderReference) return false;
+    return Store.getStockLogs().some(log =>
+      log.type === 'remove' &&
+      normalizeOrderReference(log.orderReference || '') === orderReference &&
+      String(log.productId || '') === String(productId || '')
+    );
   }
 
   // --- Render Stock History Logs (Tab 2) ---
@@ -660,17 +1259,30 @@ export function initStockPanel(refreshMainStoreFn) {
       clearLogsBtn.style.display = perms.stockClearLogs ? 'inline-flex' : 'none';
     }
     const logs = Store.getStockLogs();
+    const activeBatchMovementIds = new Set((activeStockBatch?.movements || []).map(movement => String(movement.id || '')));
     const query = logsSearchInput ? logsSearchInput.value.trim().toLowerCase() : '';
+    const typeFilter = logsTypeFilter?.value || 'all';
+    const periodFilter = logsPeriodFilter?.value || 'all';
 
     const countBadge = document.getElementById('stock-logs-badge-count');
     if (countBadge) countBadge.textContent = logs.length;
 
-    const filteredLogs = logs.filter(l => {
+    const filteredLogs = logs.filter(log => {
+      const matchesType = typeFilter === 'all'
+        || log.type === typeFilter
+        || (typeFilter === 'customer_order' && log.reason === 'customer_order');
+      if (!matchesType || !isLogWithinPeriod(log, periodFilter)) return false;
       if (!query) return true;
-      const pName = (l.productName || '').toLowerCase();
-      const op = (l.operator || '').toLowerCase();
-      const note = (l.note || '').toLowerCase();
-      return pName.includes(query) || op.includes(query) || note.includes(query);
+      const searchable = [
+        log.productName,
+        log.operator,
+        log.note,
+        log.customerName,
+        log.orderReference,
+        log.reasonLabel,
+        STOCK_REASON_LABELS[log.reason]
+      ].filter(Boolean).join(' ').toLowerCase();
+      return searchable.includes(query);
     });
 
     if (!logsListContainer) return;
@@ -679,7 +1291,7 @@ export function initStockPanel(refreshMainStoreFn) {
       logsListContainer.innerHTML = `
         <div class="stock-empty-state">
           <i class="fa-solid fa-clock-rotate-left"></i>
-          <p>لا توجد سجلات شحنات سابقة حتى الآن.</p>
+          <p>لا توجد حركات تطابق البحث أو الفلاتر الحالية.</p>
         </div>
       `;
       return;
@@ -687,33 +1299,48 @@ export function initStockPanel(refreshMainStoreFn) {
 
     let html = '';
     filteredLogs.forEach(log => {
+      const belongsToActiveBatch = activeBatchMovementIds.has(String(log.id || ''));
       let badgeClass = 'log-badge-add';
-      let badgeText = `+${log.amount} كراطين`;
+      let badgeText = `+${log.amount} كرطون`;
       if (log.type === 'remove') {
         badgeClass = 'log-badge-remove';
-        badgeText = `-${log.amount} كراطين`;
+        badgeText = `-${log.amount} كرطون`;
       } else if (log.type === 'set') {
         badgeClass = 'log-badge-set';
-        badgeText = `تعديل إلى ${log.newQty}`;
+        badgeText = `جرد: ${log.newQty}`;
       }
+
+      const reasonLabel = log.reasonLabel || STOCK_REASON_LABELS[log.reason] || legacyReasonLabel(log.type);
+      const customerLine = log.reason === 'customer_order' || log.customerName
+        ? `<div class="stock-log-order"><i class="fa-solid fa-receipt"></i><span>صرف للزبون <strong>${escapeHtml(log.customerName || 'غير محدد')}</strong>${log.orderReference ? ` ضمن الطلب <strong>#${escapeHtml(normalizeOrderReference(log.orderReference))}</strong>` : ''}</span></div>`
+        : '';
 
       html += `
         <div class="stock-log-card">
           <div class="log-main-info">
-            <img src="${log.productImg || '/images/303-3.PNG'}" onerror="this.onerror=null; this.src='/images/303-3.PNG';" alt="${log.productName || 'منتج'}" class="log-img" loading="lazy" decoding="async" />
+            <img src="${safeImageUrl(log.productImg)}" onerror="this.onerror=null; this.src='/images/303-3.PNG';" alt="${escapeHtml(log.productName || 'منتج')}" class="log-img" loading="lazy" decoding="async" />
             <div class="log-details">
-              <span class="log-title">${log.productName || 'منتج'}</span>
+              <div class="stock-log-title-row">
+                <span class="log-title">${escapeHtml(log.productName || 'منتج')}</span>
+                <span class="stock-log-reason">${escapeHtml(reasonLabel)}</span>
+              </div>
+              ${customerLine}
               <div class="log-meta">
-                <span><i class="fa-solid fa-clock"></i> ${log.dateFormatted || ''}</span>
-                <span><i class="fa-solid fa-user-gear"></i> المسؤول: <strong>${log.operator || 'غير محدد'}</strong></span>
-                ${log.note ? `<span><i class="fa-solid fa-note-sticky"></i> ${log.note}</span>` : ''}
+                <span><i class="fa-solid fa-clock"></i> ${escapeHtml(formatLogDate(log))}</span>
+                <span><i class="fa-solid fa-user-gear"></i> سجّلها <strong>${escapeHtml(log.operator || 'غير محدد')}</strong></span>
+                ${log.note ? `<span><i class="fa-solid fa-note-sticky"></i> ${escapeHtml(log.note)}</span>` : ''}
               </div>
             </div>
           </div>
-          <div style="display: flex; align-items: center; gap: 14px;">
-            <div style="text-align: left;">
-              <span style="font-size: 0.75rem; color: #94a3b8; display: block;">الرصيد: ${log.oldQty} ➔ ${log.newQty}</span>
-              <span class="${badgeClass}">${badgeText}</span>
+          <div class="stock-log-balance">
+            <div>
+              <span>الرصيد: ${Number(log.oldQty) || 0} ← ${Number(log.newQty) || 0}</span>
+              <div class="stock-log-receipt-actions">
+                <span class="${badgeClass}">${badgeText}</span>
+                <button type="button" class="btn-stock-log-receipt ${belongsToActiveBatch ? 'is-batch-movement' : ''}" data-log-id="${escapeHtml(log.id || '')}" title="${belongsToActiveBatch ? 'هذه الحركة ضمن الوصل المجمع' : 'إنشاء ومشاركة الوصل'}" aria-label="${belongsToActiveBatch ? 'فتح الوصل المجمع لهذه الشحنة' : 'إنشاء ومشاركة وصل هذه الحركة'}">
+                  <i class="fa-solid ${belongsToActiveBatch ? 'fa-layer-group' : 'fa-file-arrow-down'}"></i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -721,6 +1348,183 @@ export function initStockPanel(refreshMainStoreFn) {
     });
 
     logsListContainer.innerHTML = html;
+    logsListContainer.querySelectorAll('.btn-stock-log-receipt').forEach(button => {
+      button.addEventListener('click', () => {
+        const movement = logs.find(log => String(log.id || '') === button.dataset.logId);
+        if (!movement) return;
+        if (activeBatchMovementIds.has(String(movement.id || ''))) {
+          if (activeStockBatch?.status === 'finalized') openReceiptActions(createStockBatchReceipt(activeStockBatch));
+          else showBatchDecision(activeStockBatch?.movements?.at(-1) || movement);
+          return;
+        }
+        openReceiptActions(movement);
+      });
+    });
+  }
+
+  function renderStockInsights() {
+    if (!getCurrentUserPermissions().stockViewLogs) return;
+    const logs = Store.getStockLogs();
+    const products = Store.getProducts();
+    const last30 = logs.filter(log => isLogWithinPeriod(log, '30'));
+    const todayLogs = logs.filter(log => isLogWithinPeriod(log, 'today'));
+    const totals = last30.reduce((result, log) => {
+      const delta = getLogDelta(log);
+      if (delta > 0) result.inbound += delta;
+      if (delta < 0) result.outbound += Math.abs(delta);
+      return result;
+    }, { inbound: 0, outbound: 0 });
+
+    setText('stock-stat-inbound-30', totals.inbound);
+    setText('stock-stat-outbound-30', totals.outbound);
+    setText('stock-stat-today-moves', todayLogs.length);
+    setText('stock-stat-net-30', `${totals.inbound - totals.outbound > 0 ? '+' : ''}${totals.inbound - totals.outbound}`);
+
+    renderWeeklyChart(logs);
+    renderStockAlerts(products);
+    renderTopMovingModels(last30);
+  }
+
+  function renderWeeklyChart(logs) {
+    const chart = document.getElementById('stock-weekly-chart');
+    if (!chart) return;
+    const days = [];
+    const today = startOfDay(new Date());
+    for (let offset = 6; offset >= 0; offset -= 1) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - offset);
+      const nextDate = new Date(date);
+      nextDate.setDate(date.getDate() + 1);
+      const dayLogs = logs.filter(log => {
+        const timestamp = getLogTimestamp(log);
+        return timestamp && timestamp >= date && timestamp < nextDate;
+      });
+      const movement = dayLogs.reduce((result, log) => {
+        const delta = getLogDelta(log);
+        if (delta > 0) result.inbound += delta;
+        if (delta < 0) result.outbound += Math.abs(delta);
+        return result;
+      }, { inbound: 0, outbound: 0 });
+      days.push({ date, ...movement });
+    }
+    const maximum = Math.max(1, ...days.flatMap(day => [day.inbound, day.outbound]));
+    chart.innerHTML = days.map(day => `
+      <div class="stock-chart-day">
+        <div class="stock-chart-values">
+          <span>${day.inbound}</span>
+          <span>${day.outbound}</span>
+        </div>
+        <div class="stock-chart-bars">
+          <i class="inbound" style="height:${Math.max(day.inbound ? 8 : 2, (day.inbound / maximum) * 100)}%"></i>
+          <i class="outbound" style="height:${Math.max(day.outbound ? 8 : 2, (day.outbound / maximum) * 100)}%"></i>
+        </div>
+        <span class="stock-chart-label">${day.date.toLocaleDateString('ar-DZ', { weekday: 'short' })}</span>
+      </div>
+    `).join('');
+  }
+
+  function renderStockAlerts(products) {
+    const container = document.getElementById('stock-alerts-list');
+    if (!container) return;
+    const alerts = products
+      .map(product => ({ product, quantity: getProductStock(product) }))
+      .filter(item => item.quantity <= 5)
+      .sort((a, b) => a.quantity - b.quantity)
+      .slice(0, 6);
+    if (!alerts.length) {
+      container.innerHTML = '<div class="stock-insight-empty"><i class="fa-solid fa-circle-check"></i><span>لا توجد موديلات منخفضة المخزون حالياً.</span></div>';
+      return;
+    }
+    container.innerHTML = alerts.map(({ product, quantity }) => `
+      <div class="stock-alert-row">
+        <img src="${safeImageUrl(productImageUrl(product))}" alt="${escapeHtml(product.name?.ar || product.name || 'منتج')}" />
+        <div><strong>${escapeHtml(product.name?.ar || product.name || 'منتج')}</strong><span>${quantity === 0 ? 'نفد المخزون' : 'قريب من النفاد'}</span></div>
+        <b class="${quantity === 0 ? 'out' : 'low'}">${quantity} كرطون</b>
+      </div>
+    `).join('');
+  }
+
+  function renderTopMovingModels(logs) {
+    const container = document.getElementById('stock-top-models');
+    if (!container) return;
+    const totals = new Map();
+    logs.forEach(log => {
+      const key = log.productId || log.productName || 'unknown';
+      const existing = totals.get(key) || { name: log.productName || 'منتج', amount: 0 };
+      existing.amount += Math.abs(getLogDelta(log));
+      totals.set(key, existing);
+    });
+    const top = [...totals.values()].sort((a, b) => b.amount - a.amount).slice(0, 5);
+    if (!top.length) {
+      container.innerHTML = '<div class="stock-insight-empty"><i class="fa-solid fa-chart-simple"></i><span>ستظهر النتائج بعد تسجيل حركات المخزون.</span></div>';
+      return;
+    }
+    const maximum = Math.max(...top.map(item => item.amount), 1);
+    container.innerHTML = top.map((item, index) => `
+      <div class="stock-top-model-row">
+        <span class="stock-top-rank">${index + 1}</span>
+        <div class="stock-top-model-data">
+          <div><strong>${escapeHtml(item.name)}</strong><span>${item.amount} كرطون</span></div>
+          <i><b style="width:${(item.amount / maximum) * 100}%"></b></i>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function getLogDelta(log) {
+    const oldQty = Number(log.oldQty);
+    const newQty = Number(log.newQty);
+    if (Number.isFinite(oldQty) && Number.isFinite(newQty)) return newQty - oldQty;
+    const amount = Number(log.amount) || 0;
+    return log.type === 'remove' ? -amount : log.type === 'add' ? amount : 0;
+  }
+
+  function getLogTimestamp(log) {
+    if (!log?.timestamp) return null;
+    const date = new Date(log.timestamp);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function isLogWithinPeriod(log, period) {
+    if (period === 'all') return true;
+    const timestamp = getLogTimestamp(log);
+    if (!timestamp) return false;
+    const now = new Date();
+    const boundary = period === 'today' ? startOfDay(now) : new Date(now.getTime() - Number(period) * 86400000);
+    return timestamp >= boundary;
+  }
+
+  function startOfDay(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
+  function formatLogDate(log) {
+    const timestamp = getLogTimestamp(log);
+    if (!timestamp) return log.dateFormatted || '';
+    return timestamp.toLocaleDateString('ar-DZ', { day: 'numeric', month: 'short', year: 'numeric' }) + ' - ' + timestamp.toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function legacyReasonLabel(type) {
+    if (type === 'add') return 'استلام بضاعة';
+    if (type === 'remove') return 'صرف بضاعة';
+    return 'تسوية جرد';
+  }
+
+  function setText(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>'"]/g, character => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    })[character]);
+  }
+
+  function safeImageUrl(value) {
+    const url = String(value || '/images/303-3.PNG');
+    if (url.startsWith('/images/') || /^https:\/\//i.test(url) || /^data:image\//i.test(url)) return escapeHtml(url);
+    return '/images/303-3.PNG';
   }
 
   function getCategoryName(catId) {

@@ -23,6 +23,8 @@ const STORAGE_KEYS = {
   CART: 'joulane_cart',
   CATEGORIES: 'joulane_categories',
   STOCK_LOGS: 'joulane_stock_logs',
+  STOCK_NOTIFICATION_SETTINGS: 'joulane_stock_notification_settings',
+  STOCK_RECEIPT_DELIVERIES: 'joulane_stock_receipt_deliveries',
   USERS: 'joulane_users',
   PENDING_SYNC: 'joulane_pending_sync'
 };
@@ -36,6 +38,8 @@ const CLOUD_RECORDS = {
   orders: { storageKey: STORAGE_KEYS.ORDERS, eventName: 'joulane:ordersUpdated' },
   shipping: { storageKey: STORAGE_KEYS.SHIPPING, eventName: 'joulane:shippingUpdated' },
   stock_logs: { storageKey: STORAGE_KEYS.STOCK_LOGS, eventName: 'joulane:stockLogsUpdated' },
+  stock_notification_settings: { storageKey: STORAGE_KEYS.STOCK_NOTIFICATION_SETTINGS, eventName: 'joulane:stockNotificationSettingsUpdated' },
+  stock_receipt_deliveries: { storageKey: STORAGE_KEYS.STOCK_RECEIPT_DELIVERIES, eventName: 'joulane:stockReceiptDeliveriesUpdated' },
   users: { storageKey: STORAGE_KEYS.USERS, eventName: 'joulane:usersUpdated' }
 };
 
@@ -129,7 +133,8 @@ export const Store = {
       // Migrate existing browser/app data to the cloud only when a cloud row is absent.
       for (const [key, record] of Object.entries(CLOUD_RECORDS)) {
         if (Object.prototype.hasOwnProperty.call(remoteData, key)) continue;
-        if (['orders', 'stock_logs', 'users'].includes(key) && !SupabaseManager.hasSecureSession()) continue;
+        if (['stock_notification_settings', 'stock_receipt_deliveries'].includes(key)) continue;
+        if (['orders', 'stock_logs', 'users', 'stock_notification_settings', 'stock_receipt_deliveries'].includes(key) && !SupabaseManager.hasSecureSession()) continue;
         const localValue = localStorage.getItem(record.storageKey);
         if (!localValue) continue;
 
@@ -524,9 +529,115 @@ export const Store = {
     this.saveStockLogs(logs);
     return newLog;
   },
+  async recordStockMovement(productId, productUpdates, entry) {
+    const connected = await this.ensureSupabaseConnection();
+    if (!connected || !SupabaseManager.hasSecureSession?.('stock')) return false;
+
+    const productsBefore = this.getProducts();
+    const productIndex = productsBefore.findIndex(product => product.id === productId);
+    if (productIndex === -1) return false;
+
+    const productsAfter = productsBefore.map((product, index) => (
+      index === productIndex ? { ...product, ...productUpdates } : product
+    ));
+    const logsBefore = this.getStockLogs();
+    const now = new Date();
+    const dateFormatted = now.toLocaleDateString('ar-DZ', { year: 'numeric', month: 'short', day: 'numeric' }) + ' ' + now.toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' });
+    const newLog = {
+      id: 'log_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      timestamp: now.toISOString(),
+      dateFormatted,
+      ...entry
+    };
+
+    const atomicResult = await SupabaseManager.recordStockMovement(productId, productUpdates.seriesQty, newLog);
+    if (atomicResult === false) return false;
+
+    if (atomicResult === null) {
+      const productSaved = await SupabaseManager.pushData('products', productsAfter);
+      if (!productSaved) return false;
+      const logSaved = await SupabaseManager.pushData('stock_logs', [newLog, ...logsBefore]);
+      if (!logSaved) {
+        await SupabaseManager.pushData('products', productsBefore);
+        return false;
+      }
+    }
+
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(productsAfter));
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS_VERSION, PRODUCT_CATALOG_VERSION);
+    localStorage.setItem(STORAGE_KEYS.STOCK_LOGS, JSON.stringify([newLog, ...logsBefore]));
+    window.dispatchEvent(new CustomEvent('joulane:productsUpdated', { detail: productsAfter }));
+    window.dispatchEvent(new CustomEvent('joulane:stockLogsUpdated', { detail: [newLog, ...logsBefore] }));
+    return newLog;
+  },
   clearStockLogs() {
     localStorage.removeItem(STORAGE_KEYS.STOCK_LOGS);
     this.saveStockLogs([]);
+  },
+
+  // Admin-controlled stock receipt recipients
+  getStockNotificationSettings() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.STOCK_NOTIFICATION_SETTINGS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed.recipients)) return parsed;
+      }
+    } catch (error) {
+      console.error('Error reading stock notification settings:', error);
+    }
+    return { recipients: [], updatedAt: null };
+  },
+  async saveStockNotificationSettings(settings) {
+    const payload = {
+      recipients: Array.isArray(settings?.recipients) ? settings.recipients.slice(0, 4) : [],
+      updatedAt: new Date().toISOString()
+    };
+    const saved = await this.pushToCloud('stock_notification_settings', payload);
+    if (!saved) return false;
+    localStorage.setItem(STORAGE_KEYS.STOCK_NOTIFICATION_SETTINGS, JSON.stringify(payload));
+    window.dispatchEvent(new CustomEvent('joulane:stockNotificationSettingsUpdated', { detail: payload }));
+    return true;
+  },
+  getStockReceiptDeliveries() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.STOCK_RECEIPT_DELIVERIES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (error) {
+      console.error('Error reading stock receipt deliveries:', error);
+    }
+    return [];
+  },
+  async markStockReceiptDelivery(delivery) {
+    const connected = await this.ensureSupabaseConnection();
+    if (!connected || !SupabaseManager.hasSecureSession('stock')) return false;
+    const currentUser = (() => {
+      try {
+        return JSON.parse(sessionStorage.getItem('joulane_current_stock_user') || 'null');
+      } catch (error) {
+        return null;
+      }
+    })();
+    const event = {
+      ...delivery,
+      id: 'delivery_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      timestamp: new Date().toISOString(),
+      status: 'share_opened',
+      operatorId: currentUser?.id || '',
+      operator: currentUser?.name || 'مسؤول المخزن'
+    };
+    const saved = await SupabaseManager.markStockReceiptDelivery(event);
+    if (!saved) return false;
+    const previous = this.getStockReceiptDeliveries().filter(item => !(
+      item.receiptReference === event.receiptReference && item.recipientPhone === event.recipientPhone
+    ));
+    const updated = [event, ...previous].slice(0, 1000);
+    localStorage.setItem(STORAGE_KEYS.STOCK_RECEIPT_DELIVERIES, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('joulane:stockReceiptDeliveriesUpdated', { detail: updated }));
+    return true;
   },
 
   // User Accounts & Permissions Management
@@ -631,11 +742,17 @@ export const Store = {
     if (surface !== 'stock' || (!isSuperAdmin && permissions.stockViewLogs === false)) {
       localStorage.removeItem(STORAGE_KEYS.STOCK_LOGS);
     }
+    if (surface !== 'stock' && !(surface === 'admin' && isSuperAdmin)) {
+      localStorage.removeItem(STORAGE_KEYS.STOCK_NOTIFICATION_SETTINGS);
+      localStorage.removeItem(STORAGE_KEYS.STOCK_RECEIPT_DELIVERIES);
+    }
   },
   logoutUser() {
     SupabaseManager.clearSecureSession();
     localStorage.removeItem(STORAGE_KEYS.ORDERS);
     localStorage.removeItem(STORAGE_KEYS.STOCK_LOGS);
+    localStorage.removeItem(STORAGE_KEYS.STOCK_NOTIFICATION_SETTINGS);
+    localStorage.removeItem(STORAGE_KEYS.STOCK_RECEIPT_DELIVERIES);
   },
   async authenticateUser(usernameOrId, passcode, surface) {
     const passTrimmed = (passcode || '').trim();

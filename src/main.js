@@ -1007,8 +1007,10 @@ async function handleCheckoutSubmit(e) {
   const wilayaName = currentLang === 'ar' ? wilayaData.nameAr : wilayaData.nameFr;
 
   const formattedItems = cart.map(item => ({
+    productId: item.productId,
     nameAr: item.nameAr,
     nameFr: item.nameFr,
+    image: item.image,
     color: item.color,
     seriesQty: item.seriesQty,
     pairsCount: item.seriesQty * item.pairsPerSeries,

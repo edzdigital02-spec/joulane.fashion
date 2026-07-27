@@ -1289,8 +1289,11 @@
             <i class="fa-solid fa-boxes-stacked"></i> قائمة وإدارة الموديلات
           </button>
           <button type="button" id="stock-tab-btn-logs" class="stock-tab-btn">
-            <i class="fa-solid fa-clock-rotate-left"></i> سجل الشحنات وتاريخ الإدخال
+            <i class="fa-solid fa-clock-rotate-left"></i> سجل الحركات
             <span id="stock-logs-badge-count" class="badge-count">0</span>
+          </button>
+          <button type="button" id="stock-tab-btn-insights" class="stock-tab-btn">
+            <i class="fa-solid fa-chart-column"></i> الإحصائيات
           </button>
         </div>
 
@@ -1328,6 +1331,17 @@
             </div>
           </div>
 
+          <div id="stock-active-batch-bar" class="stock-active-batch-bar hidden">
+            <div class="stock-active-batch-icon"><i class="fa-solid fa-boxes-packing"></i></div>
+            <div class="stock-active-batch-copy">
+              <strong>شحنة قيد الإدخال</strong>
+              <span id="stock-active-batch-summary">0 موديلات - 0 كرطون</span>
+            </div>
+            <button type="button" id="stock-finish-active-batch-btn" class="btn btn-gold">
+              <i class="fa-solid fa-file-circle-check"></i> انتهيت وأنشئ الوصل
+            </button>
+          </div>
+
           <!-- Stock Toolbar Filter & Search -->
           <div class="stock-toolbar-card">
             <div class="stock-search-box">
@@ -1356,13 +1370,90 @@
           <div class="stock-toolbar-card mb-3">
             <div class="stock-search-box">
               <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" id="stock-logs-search" class="form-control" placeholder="ابحث في سجلات الإدخال، اسم الموديل، أو العامل المسؤول..." />
+              <input type="text" id="stock-logs-search" class="form-control" placeholder="ابحث بالموديل أو الزبون أو رقم الطلب أو العامل..." />
+            </div>
+            <div class="stock-filter-box stock-log-filters">
+              <select id="stock-logs-type-filter" class="form-control select-dark">
+                <option value="all">كل الحركات</option>
+                <option value="add">الوارد</option>
+                <option value="remove">الصادر</option>
+                <option value="customer_order">طلبات الزبائن</option>
+                <option value="set">تسويات الجرد</option>
+              </select>
+              <select id="stock-logs-period-filter" class="form-control select-dark">
+                <option value="all">كل الفترات</option>
+                <option value="today">اليوم</option>
+                <option value="7">آخر 7 أيام</option>
+                <option value="30">آخر 30 يوماً</option>
+              </select>
             </div>
             <button type="button" id="stock-clear-logs-btn" class="btn btn-outline-danger btn-sm">
-              <i class="fa-solid fa-trash-can"></i> مسح سجل الإدخال
+              <i class="fa-solid fa-trash-can"></i> مسح السجل
             </button>
           </div>
           <div id="stock-logs-list" class="stock-logs-list"></div>
+        </div>
+
+        <!-- Tab 3: Inventory Insights -->
+        <div id="stock-tab-insights-sec" class="hidden">
+          <div class="stock-insights-summary">
+            <div class="stock-insight-stat">
+              <span class="stock-insight-icon inbound"><i class="fa-solid fa-arrow-down"></i></span>
+              <span id="stock-stat-inbound-30" class="stock-insight-value">0</span>
+              <span class="stock-insight-label">كرطون وارد خلال 30 يوماً</span>
+            </div>
+            <div class="stock-insight-stat">
+              <span class="stock-insight-icon outbound"><i class="fa-solid fa-arrow-up"></i></span>
+              <span id="stock-stat-outbound-30" class="stock-insight-value">0</span>
+              <span class="stock-insight-label">كرطون صادر خلال 30 يوماً</span>
+            </div>
+            <div class="stock-insight-stat">
+              <span class="stock-insight-icon activity"><i class="fa-solid fa-wave-square"></i></span>
+              <span id="stock-stat-today-moves" class="stock-insight-value">0</span>
+              <span class="stock-insight-label">حركة مسجلة اليوم</span>
+            </div>
+            <div class="stock-insight-stat">
+              <span class="stock-insight-icon balance"><i class="fa-solid fa-scale-balanced"></i></span>
+              <span id="stock-stat-net-30" class="stock-insight-value">0</span>
+              <span class="stock-insight-label">صافي حركة 30 يوماً</span>
+            </div>
+          </div>
+
+          <div class="stock-insights-layout">
+            <section class="stock-insight-panel">
+              <div class="stock-panel-heading">
+                <div>
+                  <h4>حركة آخر 7 أيام</h4>
+                  <p>مقارنة الكراطين الواردة والصادرة يومياً</p>
+                </div>
+                <div class="stock-chart-legend">
+                  <span><i class="legend-dot inbound"></i> وارد</span>
+                  <span><i class="legend-dot outbound"></i> صادر</span>
+                </div>
+              </div>
+              <div id="stock-weekly-chart" class="stock-weekly-chart"></div>
+            </section>
+
+            <section class="stock-insight-panel">
+              <div class="stock-panel-heading">
+                <div>
+                  <h4>تنبيهات تحتاج الانتباه</h4>
+                  <p>الموديلات النافدة أو القريبة من النفاد</p>
+                </div>
+              </div>
+              <div id="stock-alerts-list" class="stock-alerts-list"></div>
+            </section>
+          </div>
+
+          <section class="stock-insight-panel stock-top-models-panel">
+            <div class="stock-panel-heading">
+              <div>
+                <h4>الموديلات الأكثر حركة</h4>
+                <p>حسب مجموع الكراطين المتحركة خلال 30 يوماً</p>
+              </div>
+            </div>
+            <div id="stock-top-models" class="stock-top-models"></div>
+          </section>
         </div>
       </div>
     </div>
@@ -1371,69 +1462,85 @@
     <div id="stock-entry-submodal" class="stock-submodal-overlay">
       <div class="stock-submodal-box">
         <div class="stock-submodal-header">
-          <h4 id="stock-entry-modal-title"><i class="fa-solid fa-box-archive text-gold"></i> إدخال شحنة جديد للمخزن</h4>
+          <h4 id="stock-entry-modal-title"><i class="fa-solid fa-arrow-right-arrow-left text-gold"></i> تسجيل حركة مخزون</h4>
           <button type="button" id="close-stock-entry-submodal" class="btn-close-modal"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div class="stock-entry-modal-body" style="display: flex; flex-direction: column; gap: 14px;">
-          <div style="display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 12px;">
-            <img id="stock-entry-prod-img" src="/images/303-3.PNG" style="width: 55px; height: 55px; object-fit: cover; border-radius: 8px;" />
+        <div class="stock-entry-modal-body">
+          <div class="stock-entry-product">
+            <img id="stock-entry-prod-img" src="/images/303-3.PNG" alt="صورة الموديل" />
             <div>
               <span id="stock-entry-prod-code" class="stock-model-tag">كود: 303-3</span>
-              <h5 id="stock-entry-prod-title" style="margin: 4px 0 0 0; font-size: 1rem;">موديل 303-3</h5>
+              <h5 id="stock-entry-prod-title">موديل 303-3</h5>
             </div>
           </div>
 
-          <div>
-            <label style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; margin-bottom: 6px; display: block;">نوع العملية:</label>
+          <div class="stock-entry-field">
+            <label>نوع الحركة</label>
             <div class="stock-mode-selector">
-              <button type="button" class="stock-mode-btn active" data-mode="add">🟢 إضافة شحنة (+)</button>
-              <button type="button" class="stock-mode-btn" data-mode="remove">🔴 سحب (-)</button>
-              <button type="button" class="stock-mode-btn" data-mode="set">🔵 تعديل مباشر (=)</button>
+              <button type="button" class="stock-mode-btn active" data-mode="add"><i class="fa-solid fa-truck-ramp-box"></i><span>استلام بضاعة</span><small>إضافة للمخزون</small></button>
+              <button type="button" class="stock-mode-btn" data-mode="remove"><i class="fa-solid fa-cart-flatbed"></i><span>صرف بضاعة</span><small>طلب أو تحويل</small></button>
+              <button type="button" class="stock-mode-btn" data-mode="set"><i class="fa-solid fa-clipboard-check"></i><span>تسوية جرد</span><small>تثبيت الرصيد الفعلي</small></button>
             </div>
           </div>
 
-          <div>
-            <label style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; margin-bottom: 6px; display: block;">عدد الكراطين:</label>
-            <input type="number" id="stock-entry-qty-input" class="form-control text-center" value="10" min="1" max="9999" style="font-size: 1.2rem; font-weight: 800;" />
-            <div class="stock-pills-row">
-              <button type="button" class="btn-stock-pill" data-pill="1">+1</button>
-              <button type="button" class="btn-stock-pill" data-pill="5">+5</button>
-              <button type="button" class="btn-stock-pill" data-pill="10">+10</button>
-              <button type="button" class="btn-stock-pill" data-pill="20">+20</button>
-              <button type="button" class="btn-stock-pill" data-pill="50">+50</button>
+          <div class="stock-entry-field stock-quantity-field">
+            <label id="stock-entry-qty-label">عدد الكراطين المستلمة</label>
+            <div class="stock-entry-stepper">
+              <button type="button" id="stock-entry-qty-dec" aria-label="إنقاص كرطون"><i class="fa-solid fa-minus"></i></button>
+              <input type="number" id="stock-entry-qty-input" value="1" min="1" max="9999" inputmode="numeric" aria-describedby="stock-entry-qty-help" />
+              <button type="button" id="stock-entry-qty-inc" aria-label="إضافة كرطون"><i class="fa-solid fa-plus"></i></button>
             </div>
+            <small id="stock-entry-qty-help">أدخل عدد الكراطين الموجودة في هذه الحركة.</small>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-            <div>
-              <label style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block;">اسم المسؤول / العامل:</label>
-              <input type="text" id="stock-entry-operator-input" class="form-control" placeholder="مثال: أحمد" />
+          <div class="stock-entry-context-grid">
+            <div class="stock-entry-field">
+              <label for="stock-entry-reason">سبب الحركة</label>
+              <select id="stock-entry-reason" class="form-control select-dark"></select>
             </div>
-            <div>
-              <label style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block;">ملاحظة الشحنة (اختياري):</label>
-              <input type="text" id="stock-entry-note-input" class="form-control" placeholder="مثال: شحنة من المصنع" />
+            <div id="stock-entry-order-picker-group" class="stock-entry-field hidden">
+              <label for="stock-entry-order-picker">طلب مؤكد جاهز للصرف</label>
+              <select id="stock-entry-order-picker" class="form-control select-dark">
+                <option value="">إدخال بيانات الطلب يدوياً</option>
+              </select>
+            </div>
+            <div id="stock-entry-customer-group" class="stock-entry-field hidden">
+              <label for="stock-entry-customer">اسم الزبون أو المحل</label>
+              <input type="text" id="stock-entry-customer" class="form-control" placeholder="مثال: محل الأناقة" />
+            </div>
+            <div id="stock-entry-order-ref-group" class="stock-entry-field hidden">
+              <label for="stock-entry-order-ref">مرجع الطلب</label>
+              <input type="text" id="stock-entry-order-ref" class="form-control" placeholder="مثال: JOU-4582" />
+            </div>
+            <div class="stock-entry-field">
+              <label for="stock-entry-operator-input">سجّل الحركة</label>
+              <input type="text" id="stock-entry-operator-input" class="form-control" readonly />
+            </div>
+            <div class="stock-entry-field stock-entry-note-field">
+              <label for="stock-entry-note-input">ملاحظة إضافية <span>(اختياري)</span></label>
+              <input type="text" id="stock-entry-note-input" class="form-control" placeholder="تفصيل مفيد عن الحركة" />
             </div>
           </div>
 
           <div class="stock-calc-preview">
             <div class="calc-item">
-              <span class="lbl">المخزون الحالي</span>
+              <span class="lbl">الرصيد قبل</span>
               <span id="stock-calc-current" class="val" style="color: #94a3b8;">15</span>
             </div>
             <div class="calc-item">
-              <span class="lbl">التغيير</span>
+              <span class="lbl">الحركة</span>
               <span id="stock-calc-change" class="val" style="color: #22c55e;">+10</span>
             </div>
             <div class="calc-item">
-              <span class="lbl">المخزون الجديد النهائي</span>
+              <span class="lbl">الرصيد بعد</span>
               <span id="stock-calc-final" class="val" style="color: var(--gold-primary, #c99332);">25 كرطون</span>
             </div>
           </div>
 
-          <div style="display: flex; gap: 10px; margin-top: 6px;">
-            <button type="button" id="stock-entry-cancel-btn" class="btn btn-outline-light" style="flex: 1;">إلغاء</button>
-            <button type="button" id="stock-entry-proceed-btn" class="btn btn-gold" style="flex: 2; font-weight: 800;">
-              <i class="fa-solid fa-circle-check"></i> معاينة وتأكيد الإدخال
+          <div class="stock-entry-actions">
+            <button type="button" id="stock-entry-cancel-btn" class="btn btn-outline-light">إلغاء</button>
+            <button type="button" id="stock-entry-proceed-btn" class="btn btn-gold">
+              <i class="fa-solid fa-arrow-left"></i> مراجعة الحركة
             </button>
           </div>
         </div>
@@ -1470,6 +1577,10 @@
             <span style="color: #94a3b8;">المسؤول:</span>
             <strong id="confirm-modal-operator" style="color: #fff;">أحمد</strong>
           </div>
+          <div id="confirm-modal-context-row" class="hidden" style="display: flex; justify-content: space-between; gap: 12px;">
+            <span style="color: #94a3b8;">التفاصيل:</span>
+            <strong id="confirm-modal-context" style="color: #fff; text-align: left;"></strong>
+          </div>
         </div>
 
         <div style="display: flex; gap: 10px; margin-top: 10px;">
@@ -1478,6 +1589,82 @@
             <i class="fa-solid fa-check-double"></i> تأكيد الحفظ النهائي
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Continue or finish the active stock shipment -->
+    <div id="stock-batch-submodal" class="stock-submodal-overlay">
+      <div class="stock-submodal-box stock-batch-box">
+        <div class="stock-batch-success-icon"><i class="fa-solid fa-check"></i></div>
+        <div class="stock-batch-heading">
+          <h3>تم تسجيل الموديل ضمن الشحنة</h3>
+          <p>هل انتهيت من إدخال جميع الكراتين، أم تريد إضافة موديل آخر إلى نفس الوصل؟</p>
+        </div>
+        <div class="stock-batch-last-item">
+          <img id="stock-batch-last-img" src="/images/303-3.PNG" alt="آخر موديل مسجل" />
+          <div>
+            <strong id="stock-batch-last-name">موديل 303-3</strong>
+            <span id="stock-batch-last-change">+1 كرطون</span>
+          </div>
+        </div>
+        <div class="stock-batch-totals">
+          <div><span>الموديلات</span><strong id="stock-batch-model-count">1</strong></div>
+          <div><span>الحركات</span><strong id="stock-batch-movement-count">1</strong></div>
+          <div><span>إجمالي الكراتين</span><strong id="stock-batch-carton-count">1</strong></div>
+        </div>
+        <div class="stock-batch-actions">
+          <button type="button" id="stock-batch-continue-btn" class="btn btn-outline-gold">
+            <i class="fa-solid fa-circle-plus"></i> إدخال موديل آخر
+          </button>
+          <button type="button" id="stock-batch-finish-btn" class="btn btn-gold">
+            <i class="fa-solid fa-file-circle-check"></i> انتهيت - إنشاء الوصل
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Saved Movement Receipt Actions -->
+    <div id="stock-receipt-submodal" class="stock-submodal-overlay">
+      <div class="stock-submodal-box stock-receipt-box">
+        <div class="stock-receipt-success-icon"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="stock-receipt-heading">
+          <h3 id="stock-receipt-title">تم تحديث المخزون وإنشاء الوصل</h3>
+          <p id="stock-receipt-description">تم جمع جميع الموديلات في وصل واحد منظم وجاهز للمشاركة.</p>
+        </div>
+        <div id="stock-receipt-batch-summary" class="stock-receipt-batch-summary hidden">
+          <div><span>الموديلات</span><strong id="stock-receipt-model-count">0</strong></div>
+          <div><span>الحركات</span><strong id="stock-receipt-movement-count">0</strong></div>
+          <div><span>الكميات المتحركة</span><strong id="stock-receipt-carton-count">0</strong></div>
+        </div>
+        <div class="stock-receipt-reference">
+          <span>الرقم المرجعي للوصل</span>
+          <strong id="stock-receipt-reference-value">STK-00000000-000001</strong>
+        </div>
+        <div id="stock-receipt-distribution" class="stock-receipt-distribution hidden">
+          <div class="stock-receipt-distribution-heading">
+            <div>
+              <strong>قائمة الإرسال المعتمدة</strong>
+              <span>حددها المدير العام</span>
+            </div>
+            <span id="stock-receipt-progress" class="stock-receipt-progress">0 / 3</span>
+          </div>
+          <div id="stock-receipt-recipients-list" class="stock-receipt-recipients-list"></div>
+          <p class="stock-receipt-policy">
+            يجب فتح المشاركة لكل مستلم بالترتيب. عند ظهور واتساب، تأكد من اختيار الاسم المعروض ثم أرسل ملف PDF.
+          </p>
+        </div>
+        <div class="stock-receipt-actions">
+          <button type="button" id="share-stock-receipt-btn" class="btn btn-whatsapp">
+            <i class="fa-brands fa-whatsapp"></i> مشاركة الوصل
+          </button>
+          <button type="button" id="download-stock-receipt-btn" class="btn btn-outline-gold">
+            <i class="fa-solid fa-file-pdf"></i> تنزيل PDF
+          </button>
+          <button type="button" id="close-stock-receipt-btn" class="btn btn-outline-light">
+            إغلاق
+          </button>
+        </div>
+        <p id="stock-receipt-status" class="stock-receipt-status" aria-live="polite"></p>
       </div>
     </div>
   </div>

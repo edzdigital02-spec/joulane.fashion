@@ -965,6 +965,72 @@
                   </div>
                 </div>
 
+                <!-- Super-admin only: fixed WhatsApp receipt recipients -->
+                <div id="stock-receipt-settings-card" class="cms-card stock-recipients-admin-card" hidden>
+                  <div class="cms-card-header">
+                    <i class="fa-brands fa-whatsapp"></i> مستلمو وصولات المخزن
+                  </div>
+                  <div class="cms-card-body">
+                    <p class="text-muted stock-recipients-help">
+                      حدد 3 أو 4 مسؤولين ثابتين. سيُلزم عامل المخزن بفتح مشاركة كل وصل لهؤلاء المستلمين فقط، وسيظهر تقدم المشاركة داخل سجل الوصل.
+                    </p>
+                    <form id="stock-receipt-recipients-form">
+                      <div id="stock-recipients-fields" class="stock-recipients-fields">
+                        <div class="stock-recipient-field" data-recipient-index="0">
+                          <span class="stock-recipient-number">1</span>
+                          <div class="form-group">
+                            <label for="stock-recipient-name-1">اسم المستلم</label>
+                            <input id="stock-recipient-name-1" type="text" class="form-control stock-recipient-name" autocomplete="off" placeholder="مثال: المدير العام" />
+                          </div>
+                          <div class="form-group">
+                            <label for="stock-recipient-phone-1">رقم واتساب</label>
+                            <input id="stock-recipient-phone-1" type="tel" inputmode="tel" dir="ltr" class="form-control stock-recipient-phone" autocomplete="tel" placeholder="+213 555 000 000" />
+                          </div>
+                        </div>
+                        <div class="stock-recipient-field" data-recipient-index="1">
+                          <span class="stock-recipient-number">2</span>
+                          <div class="form-group">
+                            <label for="stock-recipient-name-2">اسم المستلم</label>
+                            <input id="stock-recipient-name-2" type="text" class="form-control stock-recipient-name" autocomplete="off" placeholder="مثال: مسؤول الإدارة" />
+                          </div>
+                          <div class="form-group">
+                            <label for="stock-recipient-phone-2">رقم واتساب</label>
+                            <input id="stock-recipient-phone-2" type="tel" inputmode="tel" dir="ltr" class="form-control stock-recipient-phone" autocomplete="tel" placeholder="+213 555 000 000" />
+                          </div>
+                        </div>
+                        <div class="stock-recipient-field" data-recipient-index="2">
+                          <span class="stock-recipient-number">3</span>
+                          <div class="form-group">
+                            <label for="stock-recipient-name-3">اسم المستلم</label>
+                            <input id="stock-recipient-name-3" type="text" class="form-control stock-recipient-name" autocomplete="off" placeholder="مثال: مسؤول المخزن" />
+                          </div>
+                          <div class="form-group">
+                            <label for="stock-recipient-phone-3">رقم واتساب</label>
+                            <input id="stock-recipient-phone-3" type="tel" inputmode="tel" dir="ltr" class="form-control stock-recipient-phone" autocomplete="tel" placeholder="+213 555 000 000" />
+                          </div>
+                        </div>
+                        <div class="stock-recipient-field stock-recipient-optional" data-recipient-index="3">
+                          <span class="stock-recipient-number">4</span>
+                          <div class="form-group">
+                            <label for="stock-recipient-name-4">اسم المستلم (اختياري)</label>
+                            <input id="stock-recipient-name-4" type="text" class="form-control stock-recipient-name" autocomplete="off" placeholder="مستلم رابع" />
+                          </div>
+                          <div class="form-group">
+                            <label for="stock-recipient-phone-4">رقم واتساب (اختياري)</label>
+                            <input id="stock-recipient-phone-4" type="tel" inputmode="tel" dir="ltr" class="form-control stock-recipient-phone" autocomplete="tel" placeholder="+213 555 000 000" />
+                          </div>
+                        </div>
+                      </div>
+                      <div class="stock-recipients-save-row">
+                        <button type="submit" id="save-stock-recipients-btn" class="btn btn-gold">
+                          <i class="fa-solid fa-floppy-disk"></i> حفظ قائمة المستلمين
+                        </button>
+                        <span id="stock-recipients-status" class="stock-recipients-status" aria-live="polite"></span>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+
                 <!-- Card 4: Supabase Live Cloud Sync -->
                 <div class="cms-card" style="grid-column: 1/-1; border: 2px solid var(--gold-primary); background: rgba(201, 147, 50, 0.04);">
                   <div class="cms-card-header" style="color: var(--gold-primary); font-size: 1.05rem;">
