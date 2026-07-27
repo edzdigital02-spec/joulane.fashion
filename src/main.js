@@ -273,6 +273,77 @@ function productImageUrl(product) {
   return `/images/${fileName}`;
 }
 
+// Unified color key → hex map (must match admin.js PRODUCT_COLOR_OPTIONS)
+const COLOR_KEY_HEX = {
+  black: '#111111', white: '#f7f7f4', beige: '#d8c3a5', camel: '#b9804a',
+  brown: '#6f432a', gold: '#d4af37', silver: '#c4c8cc', gray: '#777b80',
+  red: '#d32f2f', burgundy: '#6f1d2c', pink: '#ef9aaf', purple: '#7e57c2',
+  blue: '#2979ff', navy: '#172554', green: '#2e7d32', olive: '#737a36',
+  orange: '#ef6c00'
+};
+
+const COLOR_NAME_TO_KEY = {
+  'أسود': 'black', 'noir': 'black',
+  'أبيض': 'white', 'blanc': 'white',
+  'بيج': 'beige', 'beige': 'beige',
+  'جملي': 'camel', 'camel': 'camel',
+  'بني': 'brown', 'marron': 'brown',
+  'ذهبي': 'gold', 'doré': 'gold', 'dore': 'gold',
+  'فضي': 'silver', 'argent': 'silver',
+  'رمادي': 'gray', 'gris': 'gray',
+  'أحمر': 'red', 'rouge': 'red',
+  'خمري': 'burgundy', 'bordeaux': 'burgundy',
+  'وردي': 'pink', 'rose': 'pink',
+  'بنفسجي': 'purple', 'violet': 'purple',
+  'أزرق': 'blue', 'bleu': 'blue',
+  'كحلي': 'navy', 'bleu marine': 'navy',
+  'أخضر': 'green', 'vert': 'green',
+  'زيتي': 'olive', 'kaki': 'olive',
+  'برتقالي': 'orange', 'orange': 'orange'
+};
+
+function normalizedColorName(color) {
+  return String(color || '').trim().toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function colorSwatchHex(color, index) {
+  var normalized = normalizedColorName(color);
+  if (COLOR_KEY_HEX[normalized]) return COLOR_KEY_HEX[normalized];
+  var key = COLOR_NAME_TO_KEY[normalized];
+  if (key && COLOR_KEY_HEX[key]) return COLOR_KEY_HEX[key];
+  var fallback = ['#d4af37', '#7e57c2', '#2979ff', '#d32f2f', '#2e7d32', '#b9804a'];
+  return fallback[(index || 0) % fallback.length];
+}
+
+function colorSwatchHexFromProduct(color, index, product) {
+  if (Array.isArray(product && product.colorKeys) && product.colorKeys.length) {
+    var ck = product.colorKeys[index];
+    if (ck && COLOR_KEY_HEX[ck]) return COLOR_KEY_HEX[ck];
+  }
+  return colorSwatchHex(color, index);
+}
+
+function availableProductColors(product, lang) {
+  lang = lang || currentLang;
+  var colors = product && product.colors ? (product.colors[lang] || product.colors.ar || product.colors.fr || []) : [];
+  if (!Array.isArray(colors)) return [];
+  var unique = [];
+  colors.forEach(function(c) { var s = String(c).trim(); if (s && unique.indexOf(s) === -1) unique.push(s); });
+  return unique;
+}
+
+function renderColorSwatchDots(colors, product) {
+  if (!colors || !colors.length) return '';
+  return colors.map(function(color, i) {
+    var hex = product ? colorSwatchHexFromProduct(color, i, product) : colorSwatchHex(color, i);
+    return '<i class="color-swatch" style="--cart-color:' + hex + '" title="' + escapeHTML(color) + '"></i>';
+  }).join('');
+}
+
+function colorCompositionLabel(colors) {
+  return colors.join(currentLang === 'ar' ? '، ' : ', ');
+}
+
 function formatDzd(amount, isShipping = false) {
   const isHidePrices = !!Store.getConfig()?.hideAllPrices;
   if (isHidePrices && !isShipping) {
@@ -512,6 +583,13 @@ function initCatalog(category = 'all', searchQuery = '') {
           `}
         </div>
         <p class="product-description">${productText(product, 'description')}</p>
+        ${(function(){ 
+          var c = availableProductColors(product); 
+          if(c.length) {
+            return '<div class="product-carton-colors"><span class="color-swatch-row">' + renderColorSwatchDots(c.slice(0,5), product) + '</span><small><i class="fa-solid fa-box-open"></i> ' + (currentLang === 'ar' ? 'تشكيلة تصل إلى ' + c.length + ' ألوان' : 'Composition jusqu\'à ' + c.length + ' couleurs') + '</small></div>';
+          }
+          return '';
+        })()}
         <div class="product-actions">
           <button class="btn btn-gold add-to-cart-btn" data-id="${product.id}" aria-label="${isOutOfStock ? (currentLang === 'ar' ? 'المنتج غير متوفر' : 'Produit indisponible') : `${t('addToCart')}: ${productText(product, 'name')}`}" ${isOutOfStock ? 'disabled style="opacity:0.6; cursor:not-allowed;"' : ''}>
             <i class="fa-solid fa-cart-plus"></i> ${isOutOfStock ? (currentLang === 'ar' ? 'غير متوفر' : 'Épuisé') : t('addToCart')}
@@ -532,10 +610,11 @@ function initCatalog(category = 'all', searchQuery = '') {
         const products = Store.getProducts();
         const product = products.find(p => p.id === id);
         if (product) {
-          const colors = product.colors ? (product.colors[currentLang] || product.colors.ar || []) : [];
-          const selectedColor = colors.length > 0 ? colors[0] : 'افتراضي';
-          Store.addToCart(product, selectedColor, 1);
+          var allColors = availableProductColors(product);
+          var colorsToAdd = allColors.length ? allColors : ['افتراضي'];
+          Store.addToCart(product, colorsToAdd, 1);
           showToast(t('addedToCartToast'));
+          updateCartUI();
         }
       });
     }
@@ -606,7 +685,7 @@ function renderCartModalItems() {
 
   container.innerHTML = cart.map((item, index) => {
     const product = products.find(p => p.id === item.productId) || {};
-    const colors = product.colors ? (product.colors[currentLang] || product.colors.ar || [item.color]) : [item.color];
+    const itemColors = Array.isArray(item.colors) && item.colors.length > 0 ? item.colors : (item.color ? item.color.split(' + ') : ['افتراضي']);
 
     const metaHtml = isHidePrices
       ? `<span class="price-hidden-badge"><i class="fa-solid fa-lock"></i> ${currentLang === 'ar' ? 'السعر عند الطلب' : 'Prix sur demande'}</span>`
@@ -626,10 +705,9 @@ function renderCartModalItems() {
           </div>
           <div class="cart-item-controls">
             <div class="color-picker-box">
-              <label>اللون:</label>
-              <select class="form-control cart-item-color-select" data-index="${index}">
-                ${colors.map(c => `<option value="${c}" ${c === item.color ? 'selected' : ''}>${c}</option>`).join('')}
-              </select>
+              <label><i class="fa-solid fa-palette"></i> ${currentLang === 'ar' ? 'ألوان الكرطون:' : 'Couleurs:'}</label>
+              <span class="color-swatch-row">${renderColorSwatchDots(itemColors, product)}</span>
+              <small>${colorCompositionLabel(itemColors)}</small>
             </div>
             <div class="qty-stepper-box">
               <button class="qty-btn dec-qty" data-index="${index}">-</button>
@@ -649,17 +727,6 @@ function renderCartModalItems() {
   }).join('');
 
   // Cart Item Listeners
-  container.querySelectorAll('.cart-item-color-select').forEach(select => {
-    select.addEventListener('change', (e) => {
-      const idx = parseInt(e.currentTarget.dataset.index, 10);
-      const cart = Store.getCart();
-      if (cart[idx]) {
-        cart[idx].color = e.currentTarget.value;
-        Store.saveCart(cart);
-      }
-    });
-  });
-
   container.querySelectorAll('.dec-qty').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const idx = parseInt(e.currentTarget.dataset.index, 10);
@@ -904,11 +971,10 @@ function openProductModal(productId) {
       <p>${productText(product, 'description')}</p>
       
       ${colors.length ? `
-        <div class="form-group margin-top-16">
-          <label>اختر اللون المفصل:</label>
-          <select id="modal-color-select" class="form-control">
-            ${colors.map(c => `<option value="${c}">${c}</option>`).join('')}
-          </select>
+        <div class="product-carton-colors margin-top-16">
+          <label style="display:block; margin-bottom: 8px;"><i class="fa-solid fa-palette"></i> ${currentLang === 'ar' ? 'ألوان الكرطون:' : 'Couleurs du carton:'}</label>
+          <span class="color-swatch-row">${renderColorSwatchDots(colors, product)}</span>
+          <small>${colorCompositionLabel(colors)}</small>
         </div>
       ` : ''}
 
@@ -921,9 +987,9 @@ function openProductModal(productId) {
   `;
 
   content.querySelector('.modal-add-cart-btn').addEventListener('click', () => {
-    const colorSel = document.getElementById('modal-color-select');
-    const color = colorSel ? colorSel.value : (colors[0] || 'افتراضي');
-    Store.addToCart(product, color, 1);
+    const allColors = availableProductColors(product);
+    const colorsToAdd = allColors.length ? allColors : ['افتراضي'];
+    Store.addToCart(product, colorsToAdd, 1);
     productModal.classList.remove('active');
     showToast(t('addedToCartToast'));
     openCartModal();
