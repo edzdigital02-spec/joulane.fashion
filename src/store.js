@@ -781,14 +781,15 @@ export const Store = {
             return img.startsWith('/') || img.includes('/images/');
           });
           if (hasLocalImages) {
-            console.warn('Detected products with local image URLs, refreshing from source...');
-            throw new Error('Products contain local image paths');
+            console.warn('⚠️  Detected products with local image URLs, refreshing from Cloudinary source...');
+            // Continue to fallback below to load from products.js
+          } else {
+            return parsed.map(normalizeCatalogProduct);
           }
-          return parsed.map(normalizeCatalogProduct);
         }
       }
     } catch (e) {
-      console.error('Error reading products:', e);
+      console.warn('Could not read cached products, reloading from source:', e?.message || e);
     }
     const availableProducts = PRODUCTS.map(normalizeCatalogProduct);
     localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(availableProducts));
