@@ -8,9 +8,9 @@ export const DEFAULT_CONFIG = {
   brandTitle: "JOULANE",
   brandSub_ar: "Fashion - أحذية نسائية بالجملة",
   brandSub_fr: "Fashion - Chaussures femme en gros",
-  logoImg: "/images/logo.png",
+  logoImg: "https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/skilwjfxosy60qtgwkxw.jpg",
   
-  coverImg: "/images/joulane-cover.png",
+  coverImg: "https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/qvyvxxiae7cjygigkrtw.jpg",
   
   heroBadge_ar: "بيع أحذية بالجملة - يد أولى",
   heroBadge_fr: "Vente en gros - premiere main",
@@ -18,7 +18,7 @@ export const DEFAULT_CONFIG = {
   heroTitle_fr: "Chaussures femme en gros, haute qualite et prix competitifs",
   heroText_ar: "نوفر للتجار أحدث الموديلات وبأفضل الأسعار لتحقيق أعلى هامش ربح، مع طلب سهل يجمع الاسم، الهاتف، الولاية، البلدية، ونوع التوصيل.",
   heroText_fr: "Nous fournissons aux commercants les derniers modeles aux meilleurs prix pour augmenter la marge, avec un formulaire simple: nom, telephone, wilaya, commune et type de livraison.",
-  heroImg: "/images/303-3.PNG",
+  heroImg: "https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg",
   heroFloatingNum: "36-41",
   heroFloatingText_ar: "سيرية كاملة",
   heroFloatingText_fr: "Serie complete",
@@ -57,6 +57,13 @@ export const DEFAULT_CONFIG = {
   adminPasscode: "",
   stealthMode: false,
   hideAllPrices: false,
+  showProductPromoBadge: "true",
+  showCartonBadge: "true",
+  showProductCategory: "true",
+  showProductStars: "true",
+  showProductRating: "false",
+  showProductDescription: "true",
+  showProductColors: "false",
 
   // Section Visibilities
   showTopNotice: "true",

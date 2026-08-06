@@ -4,6 +4,7 @@ import {
   getStockReceiptReference,
   shareStockReceipt
 } from './stockReceipt.js';
+import { initStockPro, refreshStockPro } from './stockPro.js';
 
 let isStockAuth = false;
 let activeProductForEntry = null;
@@ -101,14 +102,18 @@ export function initStockPanel(refreshMainStoreFn) {
   const tabBtnItems = document.getElementById('stock-tab-btn-items');
   const tabBtnLogs = document.getElementById('stock-tab-btn-logs');
   const tabBtnInsights = document.getElementById('stock-tab-btn-insights');
+  const tabBtnPro = document.getElementById('stock-tab-btn-pro');
   const tabSecItems = document.getElementById('stock-tab-items-sec');
   const tabSecLogs = document.getElementById('stock-tab-logs-sec');
   const tabSecInsights = document.getElementById('stock-tab-insights-sec');
+  const tabSecPro = document.getElementById('stock-tab-pro-sec');
 
   // Filters & Grid
   const searchInput = document.getElementById('stock-search-input');
   const categoryFilter = document.getElementById('stock-cat-filter');
   const statusFilter = document.getElementById('stock-status-filter');
+  const resetAllStockBtn = document.getElementById('stock-reset-all-btn');
+  const resetInsightsBtn = document.getElementById('stock-reset-insights-btn');
   const gridContainer = document.getElementById('stock-items-grid');
   const activeBatchBar = document.getElementById('stock-active-batch-bar');
   const activeBatchSummary = document.getElementById('stock-active-batch-summary');
@@ -194,6 +199,17 @@ export function initStockPanel(refreshMainStoreFn) {
 
   if (!stockModal) return;
   activeStockBatch = readActiveStockBatch();
+  initStockPro({
+    Store,
+    getCurrentUser: getCurrentStockUser,
+    getPermissions: getCurrentUserPermissions,
+    onRefresh: () => {
+      renderStockDashboard();
+      renderStockLogs();
+      renderStockInsights();
+      if (refreshMainStoreFn) refreshMainStoreFn();
+    }
+  });
 
   // Check URL Hash (#stock)
   if (window.location.hash === '#stock') {
@@ -239,8 +255,8 @@ export function initStockPanel(refreshMainStoreFn) {
   // Tabs Switching
   if (tabBtnItems && tabBtnLogs) {
     const activateTab = (activeButton, activeSection) => {
-      [tabBtnItems, tabBtnLogs, tabBtnInsights].forEach(button => button?.classList.toggle('active', button === activeButton));
-      [tabSecItems, tabSecLogs, tabSecInsights].forEach(section => section?.classList.toggle('hidden', section !== activeSection));
+      [tabBtnItems, tabBtnLogs, tabBtnInsights, tabBtnPro].forEach(button => button?.classList.toggle('active', button === activeButton));
+      [tabSecItems, tabSecLogs, tabSecInsights, tabSecPro].forEach(section => section?.classList.toggle('hidden', section !== activeSection));
     };
 
     tabBtnItems.addEventListener('click', () => {
@@ -264,6 +280,12 @@ export function initStockPanel(refreshMainStoreFn) {
       }
       activateTab(tabBtnInsights, tabSecInsights);
       renderStockInsights();
+    });
+
+    tabBtnPro?.addEventListener('click', async () => {
+      activateTab(tabBtnPro, tabSecPro);
+      await Store.refreshStockProData();
+      refreshStockPro();
     });
   }
 
@@ -355,7 +377,7 @@ export function initStockPanel(refreshMainStoreFn) {
     if (!activeStockBatch || !batchSubmodal) return;
     const stats = getStockBatchStats(activeStockBatch);
     const delta = getBatchMovementDelta(movement);
-    if (batchLastImg) batchLastImg.src = movement.productImg || '/images/303-3.PNG';
+    if (batchLastImg) batchLastImg.src = movement.productImg || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg';
     if (batchLastName) batchLastName.textContent = movement.productName || 'منتج';
     if (batchLastChange) {
       batchLastChange.textContent = `${delta > 0 ? '+' : ''}${delta} كرطون - الرصيد ${movement.oldQty} ← ${movement.newQty}`;
@@ -392,6 +414,7 @@ export function initStockPanel(refreshMainStoreFn) {
     const permissions = getCurrentUserPermissions();
     if (tabBtnLogs) tabBtnLogs.hidden = !permissions.stockViewLogs;
     if (tabBtnInsights) tabBtnInsights.hidden = !permissions.stockViewLogs;
+    if (resetAllStockBtn) resetAllStockBtn.hidden = getCurrentStockUser()?.id !== 'usr_super_admin';
     if (!permissions.stockViewLogs && tabBtnLogs?.classList.contains('active')) {
       tabBtnItems?.click();
     }
@@ -399,6 +422,7 @@ export function initStockPanel(refreshMainStoreFn) {
     renderStockDashboard();
     renderStockLogs();
     renderStockInsights();
+    refreshStockPro();
     renderActiveStockBatchBar();
     if (activeStockBatch?.status === 'finalized') {
       setTimeout(() => openReceiptActions(createStockBatchReceipt(activeStockBatch)), 80);
@@ -433,9 +457,18 @@ export function initStockPanel(refreshMainStoreFn) {
   window.addEventListener('joulane:usersUpdated', () => populateStockUsersSelect());
 
   // Live Search & Filters
-  if (searchInput) searchInput.addEventListener('input', () => renderStockDashboard());
-  if (categoryFilter) categoryFilter.addEventListener('change', () => renderStockDashboard());
-  if (statusFilter) statusFilter.addEventListener('change', () => renderStockDashboard());
+  if (searchInput) searchInput.addEventListener('input', () => {
+    localStorage.setItem('joulane_stock_filter_search', searchInput.value);
+    renderStockDashboard();
+  });
+  if (categoryFilter) categoryFilter.addEventListener('change', () => {
+    localStorage.setItem('joulane_stock_filter_category', categoryFilter.value);
+    renderStockDashboard();
+  });
+  if (statusFilter) statusFilter.addEventListener('change', () => {
+    localStorage.setItem('joulane_stock_filter_status', statusFilter.value);
+    renderStockDashboard();
+  });
   if (logsSearchInput) logsSearchInput.addEventListener('input', () => renderStockLogs());
   if (logsTypeFilter) logsTypeFilter.addEventListener('change', () => renderStockLogs());
   if (logsPeriodFilter) logsPeriodFilter.addEventListener('change', () => renderStockLogs());
@@ -465,6 +498,70 @@ export function initStockPanel(refreshMainStoreFn) {
     });
   }
 
+  if (resetInsightsBtn) {
+    resetInsightsBtn.addEventListener('click', () => {
+      const perms = getCurrentUserPermissions();
+      if (!perms.stockViewLogs) return;
+      if (confirm('هل أنت متأكد من تصفير الإحصائيات وبدء الحساب من جديد؟')) {
+        localStorage.setItem('joulane_stock_insights_reset_date', new Date().toISOString());
+        renderStockInsights();
+        window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: 'تم تصفير الإحصائيات بنجاح' }));
+      }
+    });
+  }
+
+  if (resetAllStockBtn) {
+    resetAllStockBtn.addEventListener('click', async () => {
+      const perms = getCurrentUserPermissions();
+      if (!perms.stockSet) {
+        alert('عذراً! حسابك لا يملك صلاحية التعديل المباشر للمخزون.');
+        return;
+      }
+
+      const productsWithStock = Store.getProducts().filter(product => getProductStock(product) > 0);
+      const totalCartons = productsWithStock.reduce((total, product) => total + getProductStock(product), 0);
+      if (totalCartons === 0) {
+        alert('المخزون كامل يساوي صفراً بالفعل، ولا توجد كميات لتصفيرها.');
+        return;
+      }
+
+      const warning = [
+        '⚠️ تحذير شديد',
+        '',
+        `سيتم جعل مخزون جميع الموديلات صفراً (${totalCartons} كرطون في ${productsWithStock.length} موديل).`,
+        'سيُنشئ النظام نسخة احتياطية تلقائياً قبل التنفيذ، والاسترجاع متاح للمدير العام.',
+        '',
+        'هل أنت متأكد من إكمال العملية؟'
+      ].join('\n');
+      if (!confirm(warning)) return;
+      if (!confirm('تأكيد أخير: اضغط «موافق» لتصفير المخزون بالكامل الآن.')) return;
+
+      const originalHtml = resetAllStockBtn.innerHTML;
+      resetAllStockBtn.disabled = true;
+      resetAllStockBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جارٍ تصفير المخزون...';
+      try {
+        const result = await Store.resetAllStock();
+        if (!result) {
+          alert('تعذر تصفير المخزون. تحقق من الاتصال وصلاحية الحساب ثم حاول مجدداً.');
+          return;
+        }
+        activeStockBatch = null;
+        persistActiveStockBatch();
+        renderStockDashboard();
+        renderStockLogs();
+        renderStockInsights();
+        renderActiveStockBatchBar();
+        if (refreshMainStoreFn) refreshMainStoreFn();
+        window.dispatchEvent(new CustomEvent('joulane:showToast', {
+          detail: `تم تصفير المخزون بالكامل: ${result.previousCartons || totalCartons} كرطون.`
+        }));
+      } finally {
+        resetAllStockBtn.disabled = false;
+        resetAllStockBtn.innerHTML = originalHtml;
+      }
+    });
+  }
+
   // Listen to store updates
   window.addEventListener('joulane:productsUpdated', () => {
     if (stockModal.classList.contains('active')) renderStockDashboard();
@@ -474,17 +571,22 @@ export function initStockPanel(refreshMainStoreFn) {
       renderStockDashboard();
       renderStockLogs();
       renderStockInsights();
+      refreshStockPro();
     }
   });
 
   function populateStockCategoriesFilter() {
     if (!categoryFilter) return;
+    const savedCategory = localStorage.getItem('joulane_stock_filter_category') || 'all';
     const categories = Store.getCategories();
     let html = '<option value="all">كل الأقسام</option>';
     categories.forEach(c => {
       html += `<option value="${c.id}">${c.nameAr}</option>`;
     });
     categoryFilter.innerHTML = html;
+    categoryFilter.value = Array.from(categoryFilter.options).some(option => option.value === savedCategory) ? savedCategory : 'all';
+    if (statusFilter) statusFilter.value = localStorage.getItem('joulane_stock_filter_status') || 'all';
+    if (searchInput) searchInput.value = localStorage.getItem('joulane_stock_filter_search') || '';
   }
 
   function renderStockDashboard() {
@@ -551,6 +653,7 @@ export function initStockPanel(refreshMainStoreFn) {
     filtered.forEach(p => {
       const qty = typeof p.seriesQty === 'number' ? p.seriesQty : (p.stockQty || 15);
       const status = p.stockStatus || (qty === 0 ? 'out_of_stock' : (qty <= 5 ? 'low_stock' : 'in_stock'));
+      const isAvailable = p.isAvailable !== false;
 
       let statusBadge = '<span class="stock-badge in-stock"><i class="fa-solid fa-circle-check"></i> متوفر</span>';
       if (status === 'low_stock') {
@@ -561,12 +664,11 @@ export function initStockPanel(refreshMainStoreFn) {
 
       const imgUrl = productImageUrl(p);
       const modelCode = (p.name?.ar || p.name || '').replace('موديل ', '');
-      const rawFileName = (p?.image || '303-3.PNG').replace(/^\/?images\//, '');
 
       html += `
         <div class="stock-card ${status}" data-id="${p.id}">
           <div class="stock-card-header">
-            <img src="${imgUrl}" onerror="this.onerror=null; this.src='/images/${rawFileName}';" alt="${p.name?.ar || ''}" class="stock-card-img" loading="lazy" decoding="async" />
+            <img src="${imgUrl}" onerror="this.onerror=null; this.src='https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg';" alt="${p.name?.ar || ''}" class="stock-card-img" loading="lazy" decoding="async" />
             <div class="stock-card-info">
               <span class="stock-model-tag">كود: ${modelCode}</span>
               <h5 class="stock-card-title">${p.name?.ar || p.name || 'منتج'}</h5>
@@ -580,6 +682,14 @@ export function initStockPanel(refreshMainStoreFn) {
               ${statusBadge}
             </div>
 
+            <div class="stock-status-row">
+              <span class="stock-label">الظهور في المتجر:</span>
+              <span class="stock-badge ${isAvailable ? 'in-stock' : 'out-of-stock'}">
+                <i class="fa-solid ${isAvailable ? 'fa-store' : 'fa-eye-slash'}"></i>
+                ${isAvailable ? 'متاح للطلب' : 'موقوف'}
+              </span>
+            </div>
+
             <div class="stock-qty-control-box" style="flex-direction: column; align-items: stretch; gap: 6px; text-align: center;">
               <span class="stock-label">الرصيد المباشر بمخزن الكراطين:</span>
               <div style="font-size: 1.4rem; font-weight: 900; color: var(--gold-primary, #c99332);">
@@ -588,6 +698,10 @@ export function initStockPanel(refreshMainStoreFn) {
             </div>
 
             ${canAdjustStock ? `<div style="margin-top: 4px;">
+              <button type="button" class="btn btn-outline-gold btn-block btn-toggle-product-availability" data-id="${p.id}" data-next-availability="${isAvailable ? 'false' : 'true'}" style="font-weight: 800; font-size: 0.82rem; width: 100%; margin-bottom: 7px;">
+                <i class="fa-solid ${isAvailable ? 'fa-eye-slash' : 'fa-store'}"></i>
+                ${isAvailable ? 'إيقاف الموديل عن الطلب' : 'إتاحة الموديل للطلب'}
+              </button>
               <button type="button" class="btn btn-gold btn-block btn-open-stock-entry" data-id="${p.id}" style="font-weight: 800; font-size: 0.88rem; width: 100%;">
                 <i class="fa-solid fa-box-archive"></i> إدخال / تعديل شحنة المخزون
               </button>
@@ -610,6 +724,24 @@ export function initStockPanel(refreshMainStoreFn) {
         if (p) {
           openStockEntryModal(p);
         }
+      });
+    });
+    gridContainer.querySelectorAll('.btn-toggle-product-availability').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const button = e.currentTarget;
+        const id = button.dataset.id;
+        const nextAvailability = button.dataset.nextAvailability === 'true';
+        const originalHtml = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جارٍ الحفظ...';
+        const saved = await Store.setProductAvailability(id, nextAvailability);
+        if (!saved) {
+          button.disabled = false;
+          button.innerHTML = originalHtml;
+          alert('تعذر حفظ حالة توفر الموديل في السحابة. تحقق من الاتصال ثم حاول مجددًا.');
+          return;
+        }
+        renderStockDashboard();
       });
     });
   }
@@ -1037,6 +1169,16 @@ export function initStockPanel(refreshMainStoreFn) {
         return;
       }
 
+      if (savedMovement.approvalRequired) {
+        confirmSubmodal?.classList.remove('active');
+        activeProductForEntry = null;
+        window.dispatchEvent(new CustomEvent('joulane:showToast', {
+          detail: 'تم إرسال الحركة الكبيرة إلى المدير العام للموافقة عليها قبل التنفيذ.'
+        }));
+        window.dispatchEvent(new CustomEvent('joulane:stockProRefresh'));
+        return;
+      }
+
       if (confirmSubmodal) confirmSubmodal.classList.remove('active');
       activeProductForEntry = null;
 
@@ -1045,9 +1187,15 @@ export function initStockPanel(refreshMainStoreFn) {
       renderStockInsights();
 
       if (refreshMainStoreFn) refreshMainStoreFn();
-      addMovementToActiveBatch(savedMovement);
-      window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: 'تم حفظ الموديل ضمن الشحنة الجارية.' }));
-      showBatchDecision(savedMovement);
+      if (savedMovement.queuedOffline) {
+        window.dispatchEvent(new CustomEvent('joulane:showToast', {
+          detail: 'تم حفظ الحركة على الجهاز وستتم مزامنتها تلقائياً عند عودة الإنترنت.'
+        }));
+      } else {
+        addMovementToActiveBatch(savedMovement);
+        window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: 'تم حفظ الموديل ضمن الشحنة الجارية.' }));
+        showBatchDecision(savedMovement);
+      }
     });
   }
 
@@ -1412,7 +1560,7 @@ export function initStockPanel(refreshMainStoreFn) {
       return;
     }
     if (clearLogsBtn) {
-      clearLogsBtn.style.display = perms.stockClearLogs ? 'inline-flex' : 'none';
+      clearLogsBtn.style.display = 'none';
     }
     const logs = Store.getStockLogs();
     const activeBatchMovementIds = new Set((activeStockBatch?.movements || []).map(movement => String(movement.id || '')));
@@ -1474,7 +1622,7 @@ export function initStockPanel(refreshMainStoreFn) {
       html += `
         <div class="stock-log-card">
           <div class="log-main-info">
-            <img src="${safeImageUrl(log.productImg)}" onerror="this.onerror=null; this.src='/images/303-3.PNG';" alt="${escapeHtml(log.productName || 'منتج')}" class="log-img" loading="lazy" decoding="async" />
+            <img src="${safeImageUrl(log.productImg)}" onerror="this.onerror=null; this.src='https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg';" alt="${escapeHtml(log.productName || 'منتج')}" class="log-img" loading="lazy" decoding="async" />
             <div class="log-details">
               <div class="stock-log-title-row">
                 <span class="log-title">${escapeHtml(log.productName || 'منتج')}</span>
@@ -1520,7 +1668,18 @@ export function initStockPanel(refreshMainStoreFn) {
 
   function renderStockInsights() {
     if (!getCurrentUserPermissions().stockViewLogs) return;
-    const logs = Store.getStockLogs();
+    let logs = Store.getStockLogs();
+
+    // Filter by reset date
+    const resetDateStr = localStorage.getItem('joulane_stock_insights_reset_date');
+    if (resetDateStr) {
+      const resetDate = new Date(resetDateStr);
+      logs = logs.filter(log => {
+        const ts = getLogTimestamp(log);
+        return ts && ts >= resetDate;
+      });
+    }
+
     const products = Store.getProducts();
     const last30 = logs.filter(log => isLogWithinPeriod(log, '30'));
     const todayLogs = logs.filter(log => isLogWithinPeriod(log, 'today'));
@@ -1678,9 +1837,9 @@ export function initStockPanel(refreshMainStoreFn) {
   }
 
   function safeImageUrl(value) {
-    const url = String(value || '/images/303-3.PNG');
-    if (url.startsWith('/images/') || /^https:\/\//i.test(url) || /^data:image\//i.test(url)) return escapeHtml(url);
-    return '/images/303-3.PNG';
+    const url = String(value || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg');
+    if (/^https:\/\//i.test(url) || /^data:image\//i.test(url)) return escapeHtml(url);
+    return 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg';
   }
 
   function getCategoryName(catId) {
@@ -1690,9 +1849,8 @@ export function initStockPanel(refreshMainStoreFn) {
   }
 
   function productImageUrl(p) {
-    const rawImg = p?.image || '/images/303-3.PNG';
+    const rawImg = p?.image || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg';
     if (rawImg.startsWith('http://') || rawImg.startsWith('https://') || rawImg.startsWith('data:')) return rawImg;
-    const fileName = rawImg.replace(/^\/?images\//, '');
-    return `/images/${fileName}`;
+    return 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg';
   }
 }

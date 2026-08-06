@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-29T21:17:16.512Z",
+  "apps": {
+    "com.joulane.customer": {
+      "appName": "Joulane Customer",
+      "versionCode": 10,
+      "versionName": "1.6.0",
+      "required": false,
+      "apkUrl": "https://www.joulanefashion.com/android/Joulane-Customer.apk",
+      "size": 25356813,
+      "sha256": "525481c736f34c9c79954400aa7860a0277e823594cccd70b2344497bddc86a7",
+      "notesAr": [
+        "مزامنة التطبيق مع آخر تحديثات موقع جولان.",
+        "تحسينات في الأداء والثبات وتجربة الاستخدام.",
+        "إضافة نظام إشعار بالتحديثات الجديدة."
+      ]
+    },
+    "com.joulane.admin": {
+      "appName": "Joulane Admin",
+      "versionCode": 10,
+      "versionName": "1.6.0",
+      "required": false,
+      "apkUrl": "https://www.joulanefashion.com/android/Joulane-Admin.apk",
+      "size": 25356549,
+      "sha256": "7d3964a6464a00c6fd75ade71657e466dca2fa05a69088d943a8fda2e5d967a4",
+      "notesAr": [
+        "مزامنة التطبيق مع آخر تحديثات موقع جولان.",
+        "تحسينات في الأداء والثبات وتجربة الاستخدام.",
+        "إضافة نظام إشعار بالتحديثات الجديدة."
+      ]
+    },
+    "com.joulane.stock": {
+      "appName": "Joulane Stock",
+      "versionCode": 10,
+      "versionName": "1.6.0",
+      "required": false,
+      "apkUrl": "https://www.joulanefashion.com/android/Joulane-Stock.apk",
+      "size": 25358033,
+      "sha256": "2ab6af96e92413ddf8837bcdefad2a6c30a18b3358800f459637c4ac909e13a2",
+      "notesAr": [
+        "مزامنة التطبيق مع آخر تحديثات موقع جولان.",
+        "تحسينات في الأداء والثبات وتجربة الاستخدام.",
+        "إضافة نظام إشعار بالتحديثات الجديدة."
+      ]
+    }
+  }
+}

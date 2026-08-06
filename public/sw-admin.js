@@ -2,8 +2,8 @@ const CACHE_NAME = 'joulane-admin-pwa-v2';
 const ASSETS = [
   '/admin.html',
   '/manifest-admin.json',
-  '/images/icon-192.png',
-  '/images/icon-512.png'
+  'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955418/joulane/products/opsarwpedahajpkgostn.png',
+  'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955418/joulane/products/ngi3kklpj1yduujoqt4s.png'
 ];
 
 self.addEventListener('install', (event) => {

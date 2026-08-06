@@ -5,10 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/generate-product-pages.mjs",
+    "verify:seo": "node scripts/verify-product-pages.mjs",
+    "verify:quick-order": "node scripts/verify-quick-order.mjs",
+    "verify:android-update": "node scripts/verify-android-update.mjs",
     "preview": "vite preview",
     "android:prepare": "npm run build && cap sync android && node scripts/prepare-android-assets.mjs",
     "android:release": "npm run android:prepare && cd android && gradlew.bat assembleCustomerRelease assembleAdminRelease assembleStockRelease && cd .. && node scripts/collect-android-artifacts.mjs",
+    "android:release:update": "npm run android:release && node scripts/publish-android-update.mjs && npm run build",
+    "android:next-update": "node scripts/bump-android-version.mjs && npm run android:release:update",
+    "release:site-and-android": "npm run android:next-update && npm run verify:android-update && npx vercel deploy --prod --yes",
     "android:bundle": "npm run android:prepare && cd android && gradlew.bat bundleCustomerRelease bundleAdminRelease bundleStockRelease"
   },
   "devDependencies": {
@@ -16,11 +22,14 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
     "@capacitor/cli": "^8.4.2",
     "@capacitor/core": "^8.4.2",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/share": "^8.0.1",
     "@supabase/supabase-js": "^2.110.8",
-    "jspdf": "^4.2.1"
+    "jspdf": "^4.2.1",
+    "sharp": "^0.35.3"
   }
 }

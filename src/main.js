@@ -1,9 +1,17 @@
 import { Store } from './store.js';
 import { Capacitor } from '@capacitor/core';
+import './androidUpdater.js';
 
 import { initAdmin } from './admin.js';
 import { initStockPanel } from './stock.js';
 import { WILAYAS } from './data/wilayas.js';
+import { localizedProductColors } from './data/productColors.js';
+import { metaProductParams, productPagePath } from './productSeo.js';
+import {
+  canShareOrderReceipt,
+  downloadOrderReceipt,
+  shareOrderReceipt
+} from './orderReceipt.js';
 
 const I18N = {
   ar: {
@@ -14,12 +22,14 @@ const I18N = {
     themeLight: "الوضع الفاتح",
     ordersAdmin: "الطلبات",
     cartTitle: "سلة التسوق",
+    floatingCartEmpty: "فتح السلة، السلة فارغة",
+    floatingCartCount: "فتح السلة، {count} كرتون",
     orderNow: "السلة",
     addToCart: "إضافة للسلة",
     addedToCartToast: "تمت إضافة المنتج للسلة بنجاح! 🛒",
     cartHeading: "سلة التسوق والجملة",
     cartSubheading: "المنتجات المختارة لإرسال طلب الجملة الموحد",
-    proceedCheckout: "إكمال الطلب الموحد",
+    proceedCheckout: "إكمال الطلب",
     clearCart: "تفريغ السلة",
     emptyCartText: "سلتك فارغة حالياً. تصفح الكتالوج وأضف المنتجات للسلة!",
     heroBadge: "بيع أحذية بالجملة - يد أولى",
@@ -52,17 +62,20 @@ const I18N = {
     stickySub: "توصيل لجميع الولايات",
     orderShort: "عرض السلة",
     checkoutTitle: "تأكيد طلب السلة الموحد",
-    checkoutText: "املأ بياناتك وسنحضر رسالة واتساب مفصلة بجميع المنتجات المطلوبة.",
+    checkoutText: "املأ بياناتك، سنحفظ الطلب ونرسل إشعاراً تلقائياً إلى واتساب المتجر.",
     qtyLabel: "الكمية",
     colorLabel: "اللون",
     nameLabel: "الاسم الكامل / اسم المحل",
-    namePlaceholder: "مثال: محل الأناقة - أمينة",
+    namePlaceholder: "",
     phoneLabel: "رقم الهاتف",
     phoneHelp: "صيغة الهاتف: 05 أو 06 أو 07 ثم 8 أرقام.",
+    invalidPhone: "أدخل رقم هاتف جزائري صحيحاً من 10 أرقام يبدأ بـ 05 أو 06 أو 07.",
     wilayaLabel: "الولاية",
     communeLabel: "البلدية",
     chooseWilayaFirst: "اختر الولاية أولا",
     deliveryTypeLabel: "نوع التوصيل",
+    shippingCarrier: "يشحن موقعنا عن طريق كازيتور.",
+    shippingPriceContact: "يتم تحديد السعر عند التواصل",
     chooseWilaya: "اختر الولاية",
     homeDelivery: "للمنزل / المحل",
     deskDelivery: "استلام من المكتب",
@@ -71,11 +84,17 @@ const I18N = {
     productsTotalLabel: "مجموع السلة",
     deliveryLabel: "التوصيل",
     totalLabel: "المجموع الكلي عند الاستلام",
-    submitOrder: "تأكيد الطلب الموحد وفتح واتساب",
+    submitOrder: "تأكيد الطلب وإرساله",
     successTitle: "تم حفظ الطلب بنجاح",
     referenceLabel: "المرجع:",
-    sendWhatsapp: "إرسال الطلب عبر واتساب",
-    backCatalog: "العودة للكتالوج",
+    sendWhatsapp: "فتح محادثة المتجر",
+    downloadInvoice: "تنزيل فاتورة PDF",
+    shareInvoice: "مشاركة الفاتورة",
+    whatsappSending: "جارٍ إرسال إشعار الطلب إلى واتساب المتجر...",
+    whatsappSent: "تم إرسال إشعار الطلب تلقائياً إلى واتساب المتجر.",
+    whatsappQueued: "تم حفظ الطلب، وسيُرسل إشعار واتساب تلقائياً عند عودة الاتصال.",
+    whatsappPendingSetup: "تم حفظ طلبك بنجاح، وسيتواصل معك المتجر لتأكيده.",
+    backCatalog: "العودة إلى الموقع",
     oneSeries: "1 كرطون = {pairs} أزواج",
     ordersCount: "{count} طلب",
     seriesPrice: "{price} / للكرطون",
@@ -99,6 +118,8 @@ const I18N = {
     themeLight: "Mode clair",
     ordersAdmin: "Commandes",
     cartTitle: "Mon Panier",
+    floatingCartEmpty: "Ouvrir le panier, le panier est vide",
+    floatingCartCount: "Ouvrir le panier, {count} carton(s)",
     orderNow: "Panier",
     addToCart: "Ajouter au panier",
     addedToCartToast: "Produit ajoute au panier ! 🛒",
@@ -137,17 +158,20 @@ const I18N = {
     stickySub: "Livraison dans toutes les wilayas",
     orderShort: "Voir Panier",
     checkoutTitle: "Confirmer la commande groupee",
-    checkoutText: "Remplissez vos informations pour envoyer la commande globale sur WhatsApp.",
+    checkoutText: "Renseignez vos informations : la commande sera enregistree et notifiee automatiquement sur WhatsApp.",
     qtyLabel: "Quantite",
     colorLabel: "Couleur",
     nameLabel: "Nom complet / boutique",
-    namePlaceholder: "Exemple: Boutique Nour - Amina",
+    namePlaceholder: "",
     phoneLabel: "Telephone",
     phoneHelp: "Format: 05, 06 ou 07 puis 8 chiffres.",
+    invalidPhone: "Saisissez un numero algerien de 10 chiffres commencant par 05, 06 ou 07.",
     wilayaLabel: "Wilaya",
     communeLabel: "Commune",
     chooseWilayaFirst: "Choisissez la wilaya d'abord",
     deliveryTypeLabel: "Type de livraison",
+    shippingCarrier: "Notre site expedie via Kazitour.",
+    shippingPriceContact: "Le prix sera determine lors du contact",
     chooseWilaya: "Choisissez la wilaya",
     homeDelivery: "A domicile / boutique",
     deskDelivery: "Retrait au bureau",
@@ -156,11 +180,17 @@ const I18N = {
     productsTotalLabel: "Total Produits",
     deliveryLabel: "Livraison",
     totalLabel: "Total a la livraison",
-    submitOrder: "Confirmer et ouvrir WhatsApp",
+    submitOrder: "Confirmer et envoyer",
     successTitle: "Commande enregistree",
     referenceLabel: "Reference:",
-    sendWhatsapp: "Envoyer sur WhatsApp",
-    backCatalog: "Retour au catalogue",
+    sendWhatsapp: "Ouvrir la discussion",
+    downloadInvoice: "Telecharger la facture PDF",
+    shareInvoice: "Partager la facture",
+    whatsappSending: "Envoi automatique de la notification WhatsApp...",
+    whatsappSent: "La notification a ete envoyee automatiquement sur WhatsApp.",
+    whatsappQueued: "Commande enregistree. La notification sera envoyee au retour de la connexion.",
+    whatsappPendingSetup: "Votre commande est bien enregistree. La boutique vous contactera pour la confirmer.",
+    backCatalog: "Retour au site",
     oneSeries: "1 serie = {pairs} paires",
     ordersCount: "{count} commandes",
     seriesPrice: "{price} / serie",
@@ -184,6 +214,13 @@ let selectedProduct = null;
 let currentWilaya = null;
 let deliveryType = "home";
 let activeCategory = "all";
+let lastSuccessfulOrder = null;
+let incomingProductHandled = false;
+let incomingProductRetryAttached = false;
+let floatingCartPulseTimer = null;
+
+const ATTRIBUTION_STORAGE_KEY = 'joulane_marketing_attribution';
+const ATTRIBUTION_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
 
 const productsContainer = document.getElementById('products-container');
 const categoriesBar = document.getElementById('categories-bar');
@@ -198,8 +235,10 @@ const langToggle = document.getElementById('lang-toggle');
 const themeToggle = document.getElementById('theme-toggle');
 
 document.addEventListener('DOMContentLoaded', () => {
+  captureMarketingAttribution();
   renderApp();
   initEventListeners();
+  handleIncomingProductLink();
 
   const pageSurface = window.location.pathname.endsWith('/admin.html')
     ? 'admin'
@@ -214,7 +253,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (pageSurface === 'customer' || pageSurface === 'admin') initAdmin(renderApp);
   if (pageSurface === 'stock') initStockPanel(renderApp);
-  Store.initSupabase(renderApp);
+  const supabaseReady = Store.initSupabase(renderApp);
+  setupOrderTracking(supabaseReady);
 
 
 
@@ -223,8 +263,13 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('joulane:configUpdated', () => renderApp());
   window.addEventListener('joulane:productsUpdated', () => renderApp());
   window.addEventListener('joulane:categoriesUpdated', () => renderApp());
+  window.addEventListener('joulane:shippingUpdated', () => updatePricingSummary());
   window.addEventListener('joulane:cartUpdated', () => updateCartUI());
   window.addEventListener('joulane:showToast', (e) => showToast(e.detail));
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'joulane_cart') updateCartUI();
+  });
+  window.addEventListener('pageshow', () => updateCartUI());
 });
 
 function renderApp() {
@@ -245,8 +290,277 @@ function escapeHTML(str) {
   );
 }
 
+const TRACKING_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function normalizeTrackingCode(value) {
+  const compact = String(value || '').toUpperCase().replace(/[^A-Z2-9]/g, '');
+  const payload = compact.startsWith('JLN') ? compact.slice(3) : compact;
+  return payload.length === 10 ? `JLN-${payload}` : String(value || '').trim().toUpperCase();
+}
+
+function createTrackingCode() {
+  const bytes = new Uint8Array(10);
+  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes);
+  else for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+  return `JLN-${Array.from(bytes, byte => TRACKING_ALPHABET[byte % TRACKING_ALPHABET.length]).join('')}`;
+}
+
+function trackingLink(trackingCode) {
+  const url = new URL('/', window.location.origin);
+  url.searchParams.set('track', normalizeTrackingCode(trackingCode));
+  url.hash = 'track-order';
+  return url.toString();
+}
+
+async function copyText(value, successMessage) {
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+    else {
+      const helper = document.createElement('textarea');
+      helper.value = value;
+      helper.style.position = 'fixed';
+      helper.style.opacity = '0';
+      document.body.appendChild(helper);
+      helper.select();
+      document.execCommand('copy');
+      helper.remove();
+    }
+    showToast(successMessage || 'تم النسخ بنجاح');
+    return true;
+  } catch (_) {
+    showToast('تعذر النسخ تلقائياً. حدّد النص وانسخه يدوياً.', 'error');
+    return false;
+  }
+}
+
+function trackingStatusMeta(status) {
+  const values = {
+    New: { ar: 'تم استلام الطلب', fr: 'Commande reçue', icon: 'fa-receipt' },
+    Confirmed: { ar: 'تم تأكيد الطلب', fr: 'Commande confirmée', icon: 'fa-circle-check' },
+    Shipped: { ar: 'الطلب في طريقه إليك', fr: 'Commande expédiée', icon: 'fa-truck-fast' },
+    Delivered: { ar: 'تم تسليم الطلب', fr: 'Commande livrée', icon: 'fa-box-circle-check' },
+    Cancelled: { ar: 'تم إلغاء الطلب', fr: 'Commande annulée', icon: 'fa-ban' }
+  };
+  return values[status] || values.New;
+}
+
+function trackingDate(value) {
+  const date = new Date(value || '');
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat(currentLang === 'fr' ? 'fr-DZ' : 'ar-DZ', {
+    dateStyle: 'medium', timeStyle: 'short'
+  }).format(date);
+}
+
+function renderTrackingResult(payload) {
+  const result = document.getElementById('tracking-result');
+  if (!result) return;
+  result.hidden = false;
+  if (payload?.status === 'loading') {
+    result.className = 'tracking-result is-loading';
+    result.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>جارٍ البحث عن طلبك...</span>';
+    return;
+  }
+  if (payload?.status !== 'ok' || !payload.order) {
+    const unavailable = payload?.status === 'unavailable';
+    result.className = 'tracking-result is-error';
+    result.innerHTML = `<i class="fa-solid ${unavailable ? 'fa-wifi' : 'fa-circle-exclamation'}"></i><div><strong>${unavailable ? 'تعذر الاتصال الآن' : 'لم نعثر على هذا الطلب'}</strong><small>${unavailable ? 'تحقق من الإنترنت وحاول مرة أخرى.' : 'راجع رقم التتبع كما ظهر لك بعد إتمام الطلب.'}</small></div>`;
+    return;
+  }
+  const order = payload.order;
+  const status = trackingStatusMeta(order.orderStatus);
+  const timeline = Array.isArray(order.timeline) ? order.timeline : [];
+  result.className = `tracking-result is-success is-${String(order.orderStatus || 'New').toLowerCase()}`;
+  result.innerHTML = `
+    <div class="tracking-current-status">
+      <span class="tracking-current-status__icon"><i class="fa-solid ${status.icon}"></i></span>
+      <div><small>الحالة الحالية</small><strong>${escapeHTML(currentLang === 'fr' ? status.fr : status.ar)}</strong><span>آخر تحديث: ${escapeHTML(trackingDate(order.updatedAt))}</span></div>
+    </div>
+    <div class="tracking-order-meta">
+      <span><small>رقم التتبع</small><b>${escapeHTML(order.trackingCode)}</b></span>
+      <span><small>مرجع الطلب</small><b>${escapeHTML(order.reference)}</b></span>
+      <span><small>عدد المنتجات</small><b>${Number(order.itemCount) || 1}</b></span>
+    </div>
+    <ol class="tracking-timeline">
+      ${timeline.map((event, index) => {
+        const eventMeta = trackingStatusMeta(event.status);
+        return `<li class="${index === timeline.length - 1 ? 'is-current' : 'is-complete'}"><span><i class="fa-solid ${eventMeta.icon}"></i></span><div><strong>${escapeHTML(currentLang === 'fr' ? eventMeta.fr : eventMeta.ar)}</strong><small>${escapeHTML(trackingDate(event.at))}</small></div></li>`;
+      }).join('')}
+    </ol>`;
+}
+
+function setupOrderTracking(supabaseReady) {
+  const toggle = document.getElementById('tracking-widget-toggle');
+  const panel = document.getElementById('tracking-widget-panel');
+  const form = document.getElementById('tracking-search-form');
+  const input = document.getElementById('tracking-code-input');
+  if (!toggle || !panel || !form || !input) return;
+  const setOpen = open => {
+    panel.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    document.getElementById('track-order')?.classList.toggle('is-open', open);
+    toggle.closest('.catalog-command-bar')?.classList.toggle('is-tracking-open', open);
+  };
+  toggle.addEventListener('click', () => setOpen(panel.hidden));
+  input.addEventListener('input', () => { input.value = normalizeTrackingCode(input.value).slice(0, 14); });
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const code = normalizeTrackingCode(input.value);
+    if (!/^JLN-[A-Z2-9]{10}$/.test(code)) {
+      renderTrackingResult({ status: 'invalid' });
+      return;
+    }
+    input.value = code;
+    renderTrackingResult({ status: 'loading' });
+    renderTrackingResult(await Store.trackOrder(code));
+  });
+  const incomingCode = new URLSearchParams(window.location.search).get('track');
+  if (incomingCode) {
+    setOpen(true);
+    input.value = normalizeTrackingCode(incomingCode);
+    document.getElementById('track-order')?.scrollIntoView({ block: 'center' });
+    Promise.resolve(supabaseReady).finally(() => form.requestSubmit());
+  }
+}
+
 function t(key) {
   return I18N[currentLang][key] || key;
+}
+
+function trackMetaEvent(eventName, product, extra = {}, options = {}) {
+  if (!window.JoulaneAnalytics) return false;
+  const params = product
+    ? metaProductParams(product, currentLang, extra)
+    : extra;
+  return window.JoulaneAnalytics.track(eventName, params, options);
+}
+
+function captureMarketingAttribution() {
+  const query = new URLSearchParams(window.location.search);
+  const currentTouch = {};
+  ATTRIBUTION_KEYS.forEach(key => {
+    const value = (query.get(key) || '').trim();
+    if (value) currentTouch[key] = value.slice(0, 500);
+  });
+  if (!Object.keys(currentTouch).length) return;
+
+  try {
+    const raw = localStorage.getItem(ATTRIBUTION_STORAGE_KEY);
+    const existing = raw ? JSON.parse(raw) : {};
+    const capturedAt = new Date().toISOString();
+    const attribution = {
+      firstTouch: existing.firstTouch || { ...currentTouch, capturedAt },
+      lastTouch: { ...currentTouch, capturedAt }
+    };
+    localStorage.setItem(ATTRIBUTION_STORAGE_KEY, JSON.stringify(attribution));
+  } catch (_) {
+    // Attribution is optional and must never block the storefront.
+  }
+}
+
+function marketingAttributionSnapshot() {
+  try {
+    const raw = localStorage.getItem(ATTRIBUTION_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function addProductToCart(product) {
+  if (!product || product.isAvailable === false) {
+    showToast(
+      currentLang === 'ar' ? 'هذا الموديل غير متوفر حاليًا.' : 'Ce modèle est indisponible actuellement.',
+      'error'
+    );
+    return false;
+  }
+
+  const allColors = availableProductColors(product);
+  const colorsToAdd = allColors.length ? allColors : ['تشكيلة حسب الموديل'];
+  Store.addToCart(product, colorsToAdd, 1);
+  trackMetaEvent('AddToCart', product, {
+    quantity: 1,
+    contents: [{ id: product.id, quantity: 1 }],
+    value: Number(product.seriesPrice) || (Number(product.price) * (Number(product.pairsPerSeries) || 18)),
+    currency: 'DZD'
+  });
+  showToast(t('addedToCartToast'));
+  updateCartUI();
+  return true;
+}
+
+function removeIncomingProductParameter() {
+  try {
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete('add');
+    nextUrl.searchParams.delete('product');
+    nextUrl.searchParams.delete('cart');
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
+    );
+  } catch (_) {
+    // URL cleanup is optional and must never block product browsing.
+  }
+}
+
+function focusCatalogProduct(productId) {
+  window.requestAnimationFrame(() => {
+    const linkedCard = Array.from(
+      productsContainer?.querySelectorAll('[data-product-id]') || []
+    ).find(card => card.dataset.productId === productId);
+    const target = linkedCard || document.getElementById('catalog');
+
+    target?.scrollIntoView({
+      behavior: 'smooth',
+      block: linkedCard ? 'center' : 'start'
+    });
+
+    if (linkedCard) {
+      linkedCard.classList.add('is-linked-product');
+      window.setTimeout(() => linkedCard.classList.remove('is-linked-product'), 3200);
+    }
+  });
+}
+
+function handleIncomingProductLink() {
+  if (incomingProductHandled) return;
+  const query = new URLSearchParams(window.location.search);
+  const addProductId = query.get('add');
+  const productId = addProductId || query.get('product');
+  const shouldOpenCart = ['open', '1', 'true'].includes((query.get('cart') || '').toLowerCase());
+  if (!productId) {
+    if (shouldOpenCart) {
+      incomingProductHandled = true;
+      removeIncomingProductParameter();
+      openCartModal();
+    }
+    return;
+  }
+
+  const product = Store.getProducts().find(item => item.id === productId);
+  if (!product) {
+    if (!incomingProductRetryAttached) {
+      incomingProductRetryAttached = true;
+      window.addEventListener('joulane:productsUpdated', () => {
+        incomingProductRetryAttached = false;
+        handleIncomingProductLink();
+      }, { once: true });
+    }
+    return;
+  }
+
+  incomingProductHandled = true;
+  removeIncomingProductParameter();
+  focusCatalogProduct(product.id);
+
+  if (addProductId) {
+    addProductToCart(product);
+  }
+  if (shouldOpenCart) openCartModal();
 }
 
 function template(key, values = {}) {
@@ -266,91 +580,55 @@ function productText(product, field) {
 }
 
 function productImageUrl(product) {
-  const rawImg = typeof product === 'string' ? product : (product?.image || '/images/303-3.PNG');
-  if (!rawImg) return '/images/303-3.PNG';
+  const rawImg = typeof product === 'string' ? product : (product?.image || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg');
+  if (!rawImg) return 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg';
   if (rawImg.startsWith('http://') || rawImg.startsWith('https://') || rawImg.startsWith('data:')) return rawImg;
-  const fileName = rawImg.replace(/^\/?images\//, '');
-  return `/images/${fileName}`;
-}
-
-// Unified color key → hex map (must match admin.js PRODUCT_COLOR_OPTIONS)
-const COLOR_KEY_HEX = {
-  black: '#111111', white: '#f7f7f4', beige: '#d8c3a5', camel: '#b9804a',
-  brown: '#6f432a', gold: '#d4af37', silver: '#c4c8cc', gray: '#777b80',
-  red: '#d32f2f', burgundy: '#6f1d2c', pink: '#ef9aaf', purple: '#7e57c2',
-  blue: '#2979ff', navy: '#172554', green: '#2e7d32', olive: '#737a36',
-  orange: '#ef6c00'
-};
-
-const COLOR_NAME_TO_KEY = {
-  'أسود': 'black', 'noir': 'black',
-  'أبيض': 'white', 'blanc': 'white',
-  'بيج': 'beige', 'beige': 'beige',
-  'جملي': 'camel', 'camel': 'camel',
-  'بني': 'brown', 'marron': 'brown',
-  'ذهبي': 'gold', 'doré': 'gold', 'dore': 'gold',
-  'فضي': 'silver', 'argent': 'silver',
-  'رمادي': 'gray', 'gris': 'gray',
-  'أحمر': 'red', 'rouge': 'red',
-  'خمري': 'burgundy', 'bordeaux': 'burgundy',
-  'وردي': 'pink', 'rose': 'pink',
-  'بنفسجي': 'purple', 'violet': 'purple',
-  'أزرق': 'blue', 'bleu': 'blue',
-  'كحلي': 'navy', 'bleu marine': 'navy',
-  'أخضر': 'green', 'vert': 'green',
-  'زيتي': 'olive', 'kaki': 'olive',
-  'برتقالي': 'orange', 'orange': 'orange'
-};
-
-function normalizedColorName(color) {
-  return String(color || '').trim().toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function colorSwatchHex(color, index) {
-  var normalized = normalizedColorName(color);
-  if (COLOR_KEY_HEX[normalized]) return COLOR_KEY_HEX[normalized];
-  var key = COLOR_NAME_TO_KEY[normalized];
-  if (key && COLOR_KEY_HEX[key]) return COLOR_KEY_HEX[key];
-  var fallback = ['#d4af37', '#7e57c2', '#2979ff', '#d32f2f', '#2e7d32', '#b9804a'];
-  return fallback[(index || 0) % fallback.length];
-}
-
-function colorSwatchHexFromProduct(color, index, product) {
-  if (Array.isArray(product && product.colorKeys) && product.colorKeys.length) {
-    var ck = product.colorKeys[index];
-    if (ck && COLOR_KEY_HEX[ck]) return COLOR_KEY_HEX[ck];
-  }
-  return colorSwatchHex(color, index);
+  return 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg';
 }
 
 function availableProductColors(product, lang) {
-  lang = lang || currentLang;
-  var colors = product && product.colors ? (product.colors[lang] || product.colors.ar || product.colors.fr || []) : [];
-  if (!Array.isArray(colors)) return [];
+  var colors = localizedProductColors(product, lang || currentLang);
   var unique = [];
   colors.forEach(function(c) { var s = String(c).trim(); if (s && unique.indexOf(s) === -1) unique.push(s); });
   return unique;
 }
 
-function renderColorSwatchDots(colors, product) {
-  if (!colors || !colors.length) return '';
-  return colors.map(function(color, i) {
-    var hex = product ? colorSwatchHexFromProduct(color, i, product) : colorSwatchHex(color, i);
-    return '<i class="color-swatch" style="--cart-color:' + hex + '" title="' + escapeHTML(color) + '"></i>';
-  }).join('');
+function cartonQuantityLabel(quantity) {
+  const count = Math.max(1, Number(quantity) || 1);
+  if (currentLang === 'fr') return `${count} carton${count > 1 ? 's' : ''}`;
+  if (count === 1) return 'كرتون واحد';
+  if (count === 2) return 'كرتونان';
+  if (count >= 3 && count <= 10) return `${count} كراتين`;
+  return `${count} كرتون`;
 }
 
-function colorCompositionLabel(colors) {
-  return colors.join(currentLang === 'ar' ? '، ' : ', ');
+function configFlag(value, fallback = true) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['false', '0', 'off', 'no', 'hidden'].includes(normalized)) return false;
+    if (['true', '1', 'on', 'yes', 'visible'].includes(normalized)) return true;
+  }
+  return fallback;
 }
 
 function formatDzd(amount, isShipping = false) {
-  const isHidePrices = !!Store.getConfig()?.hideAllPrices;
+  const isHidePrices = configFlag(Store.getConfig()?.hideAllPrices, false);
   if (isHidePrices && !isShipping) {
-    return currentLang === 'ar' ? 'السعر عند الطلب' : 'Prix sur demande';
+    return t('shippingPriceContact');
   }
   const value = Number(amount).toLocaleString(currentLang === 'ar' ? 'ar-DZ' : 'fr-DZ');
   return currentLang === 'ar' ? `${value} دج` : `${value} DZD`;
+}
+
+function shippingPricesAreVisible(shippingRates = Store.getShippingRates()) {
+  return configFlag(shippingRates?._showPrices, false);
+}
+
+function shippingRateAmount(rate, field) {
+  const amount = Number(rate?.[field]);
+  return Number.isFinite(amount) && amount >= 0 ? amount : 0;
 }
 
 function applyTheme() {
@@ -450,7 +728,7 @@ function applyConfigToDOM() {
   const toggleVisibility = (selector, isVisibleVal) => {
     const el = document.querySelector(selector);
     if (!el) return;
-    const isVisible = isVisibleVal === true || isVisibleVal === 'true' || isVisibleVal === undefined || isVisibleVal === null;
+    const isVisible = configFlag(isVisibleVal, true);
     if (!isVisible) {
       el.style.setProperty('display', 'none', 'important');
       el.classList.add('section-hidden');
@@ -530,6 +808,14 @@ function initCatalog(category = 'all', searchQuery = '') {
   activeCategory = category;
   productsContainer.innerHTML = '';
   const products = Store.getProducts();
+  const productOrderStats = Store.getProductOrderStats();
+  const catalogConfig = Store.getConfig();
+  const showPromoBadge = configFlag(catalogConfig.showProductPromoBadge, true);
+  const showCartonBadge = configFlag(catalogConfig.showCartonBadge, true);
+  const showProductCategory = configFlag(catalogConfig.showProductCategory, true);
+  const showProductStars = configFlag(catalogConfig.showProductStars, true);
+  const showProductRating = configFlag(catalogConfig.showProductRating, false);
+  const showProductDescription = configFlag(catalogConfig.showProductDescription, true);
   let filtered = category === 'all' ? products : products.filter(p => p.category === category);
 
   const query = (searchQuery || '').trim().toLowerCase();
@@ -554,48 +840,43 @@ function initCatalog(category = 'all', searchQuery = '') {
   }
 
   filtered.forEach(product => {
-    const isOutOfStock = product.stockStatus === 'out_of_stock';
-    const isHidePrices = !!Store.getConfig()?.hideAllPrices;
+    const isUnavailable = product.isAvailable === false;
+    const isHidePrices = configFlag(catalogConfig.hideAllPrices, false);
+    const realOrderCount = Math.max(0, Number(productOrderStats?.[product.id]?.orders) || 0);
     const card = document.createElement('article');
-    card.className = `product-card ${isOutOfStock ? 'out-of-stock-card' : ''}`;
+    card.className = `product-card ${isUnavailable ? 'out-of-stock-card' : ''}`;
+    card.dataset.productId = product.id;
     card.innerHTML = `
+      <a class="product-card-link" href="${escapeHTML(productPagePath(product, currentLang))}" aria-label="${escapeHTML(`${t('viewDetails')}: ${productText(product, 'name')}`)}"></a>
       <div class="product-image-box">
-        <img src="${productImageUrl(product)}" alt="${productText(product, 'name')}" class="product-img" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='${product.image || '/images/303-3.PNG'}';" />
-        <span class="discount-badge">${productText(product, 'discountBadge')}</span>
-        <span class="stock-badge">
+        <img src="${productImageUrl(product)}" alt="${productText(product, 'name')}" class="product-img" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='${product.image || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg'}';" />
+        ${showPromoBadge && productText(product, 'discountBadge') ? `<span class="discount-badge">${productText(product, 'discountBadge')}</span>` : ''}
+        ${showCartonBadge || isUnavailable ? `<span class="stock-badge">
           <i class="fa-solid fa-box"></i> 
-          ${isOutOfStock ? (currentLang === 'ar' ? 'غير متوفر' : 'Épuisé') : template('oneSeries', { pairs: product.pairsPerSeries || 6 })}
-        </span>
+          ${isUnavailable ? (currentLang === 'ar' ? 'غير متوفر' : 'Indisponible') : template('oneSeries', { pairs: product.pairsPerSeries || 18 })}
+        </span>` : ''}
       </div>
       <div class="product-details">
-        <span class="product-cat">${categoryLabel(product.category)}</span>
+        ${showProductCategory ? `<span class="product-cat">${categoryLabel(product.category)}</span>` : ''}
         <h3 class="product-title">${productText(product, 'name')}</h3>
-        <div class="product-rating">
-          <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
-          <span>${product.rating || 5.0} (${template('ordersCount', { count: product.reviewsCount || 100 })})</span>
-        </div>
+        ${showProductStars || (showProductRating && realOrderCount > 0) ? `<div class="product-rating">
+          ${showProductStars ? `<span class="product-stars" role="img" aria-label="${currentLang === 'ar' ? 'تقييم خمس نجوم' : 'Note de cinq étoiles'}">
+            <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+          </span>` : ''}
+          ${showProductRating && realOrderCount > 0 ? `<span class="product-orders-count"><i class="fa-solid fa-box-open"></i> ${template('ordersCount', { count: realOrderCount })}</span>` : ''}
+        </div>` : ''}
         <div class="price-box">
           ${isHidePrices ? `
-            <span class="current-price price-hidden-badge"><i class="fa-solid fa-lock"></i> ${currentLang === 'ar' ? 'السعر عند الطلب' : 'Prix sur demande'}</span>
+            <span class="current-price price-hidden-badge">${t('shippingPriceContact')}</span>
           ` : `
             <span class="current-price">${formatDzd(product.seriesPrice)}</span>
             ${product.oldPrice ? `<span class="old-price">${formatDzd(product.oldPrice)}</span>` : ''}
           `}
         </div>
-        <p class="product-description">${productText(product, 'description')}</p>
-        ${(function(){ 
-          var c = availableProductColors(product); 
-          if(c.length) {
-            return '<div class="product-carton-colors"><span class="color-swatch-row">' + renderColorSwatchDots(c.slice(0,5), product) + '</span><small><i class="fa-solid fa-box-open"></i> ' + (currentLang === 'ar' ? 'تشكيلة تصل إلى ' + c.length + ' ألوان' : 'Composition jusqu\'à ' + c.length + ' couleurs') + '</small></div>';
-          }
-          return '';
-        })()}
+        ${showProductDescription ? `<p class="product-description">${productText(product, 'description')}</p>` : ''}
         <div class="product-actions">
-          <button class="btn btn-gold add-to-cart-btn" data-id="${product.id}" aria-label="${isOutOfStock ? (currentLang === 'ar' ? 'المنتج غير متوفر' : 'Produit indisponible') : `${t('addToCart')}: ${productText(product, 'name')}`}" ${isOutOfStock ? 'disabled style="opacity:0.6; cursor:not-allowed;"' : ''}>
-            <i class="fa-solid fa-cart-plus"></i> ${isOutOfStock ? (currentLang === 'ar' ? 'غير متوفر' : 'Épuisé') : t('addToCart')}
-          </button>
-          <button class="btn btn-outline-white view-details-btn" data-id="${product.id}" title="${t('viewDetails')}" aria-label="${t('viewDetails')}: ${productText(product, 'name')}">
-            <i class="fa-solid fa-eye"></i>
+          <button class="btn btn-gold add-to-cart-btn" data-id="${product.id}" aria-label="${isUnavailable ? (currentLang === 'ar' ? 'المنتج غير متوفر' : 'Produit indisponible') : `${t('addToCart')}: ${productText(product, 'name')}`}" ${isUnavailable ? 'disabled style="opacity:0.6; cursor:not-allowed;"' : ''}>
+            <i class="fa-solid fa-cart-plus"></i> ${isUnavailable ? (currentLang === 'ar' ? 'غير متوفر' : 'Indisponible') : t('addToCart')}
           </button>
         </div>
       </div>
@@ -610,19 +891,12 @@ function initCatalog(category = 'all', searchQuery = '') {
         const products = Store.getProducts();
         const product = products.find(p => p.id === id);
         if (product) {
-          var allColors = availableProductColors(product);
-          var colorsToAdd = allColors.length ? allColors : ['افتراضي'];
-          Store.addToCart(product, colorsToAdd, 1);
-          showToast(t('addedToCartToast'));
-          updateCartUI();
+          addProductToCart(product);
         }
       });
     }
   });
 
-  document.querySelectorAll('.view-details-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => openProductModal(e.currentTarget.dataset.id));
-  });
 }
 
 /* ==========================================================================
@@ -637,6 +911,32 @@ function updateCartUI() {
   // Header Badge
   const headerBadge = document.getElementById('header-cart-badge');
   if (headerBadge) headerBadge.textContent = count;
+
+  const floatingButton = document.getElementById('floating-cart-btn');
+  const floatingBadge = document.getElementById('floating-cart-badge');
+  if (floatingButton) {
+    const previousCount = Number(floatingButton.dataset.cartCount || 0);
+    floatingButton.dataset.cartCount = String(count);
+    floatingButton.classList.toggle('has-items', count > 0);
+    floatingButton.setAttribute(
+      'aria-label',
+      count > 0 ? template('floatingCartCount', { count }) : t('floatingCartEmpty')
+    );
+
+    if (count > previousCount) {
+      floatingButton.classList.remove('is-pulsing');
+      void floatingButton.offsetWidth;
+      floatingButton.classList.add('is-pulsing');
+      window.clearTimeout(floatingCartPulseTimer);
+      floatingCartPulseTimer = window.setTimeout(() => {
+        floatingButton.classList.remove('is-pulsing');
+      }, 620);
+    }
+  }
+  if (floatingBadge) {
+    floatingBadge.hidden = count <= 0;
+    floatingBadge.textContent = count > 99 ? '99+' : String(count);
+  }
 
   // Mobile Sticky Info
   const stickyPrice = document.querySelector('.sticky-price');
@@ -677,48 +977,40 @@ function renderCartModalItems() {
   if (footer) footer.style.display = 'block';
   if (subtotalEl) {
     subtotalEl.textContent = isHidePrices
-      ? (currentLang === 'ar' ? 'السعر عند الطلب' : 'Prix sur demande')
+      ? t('shippingPriceContact')
       : formatDzd(Store.getCartTotal());
   }
 
-  const products = Store.getProducts();
-
   container.innerHTML = cart.map((item, index) => {
-    const product = products.find(p => p.id === item.productId) || {};
-    const itemColors = Array.isArray(item.colors) && item.colors.length > 0 ? item.colors : (item.color ? item.color.split(' + ') : ['افتراضي']);
-
     const metaHtml = isHidePrices
-      ? `<span class="price-hidden-badge"><i class="fa-solid fa-lock"></i> ${currentLang === 'ar' ? 'السعر عند الطلب' : 'Prix sur demande'}</span>`
+      ? `<span class="price-hidden-badge">${t('shippingPriceContact')}</span>`
       : `<span class="text-gold"><strong>${formatDzd(item.seriesPrice)}</strong> / للكرطون (${item.pairsPerSeries} أزواج)</span>`;
 
     const itemTotalHtml = isHidePrices
-      ? `<span class="price-hidden-badge" style="font-size:0.8rem;"><i class="fa-solid fa-lock"></i> عند الطلب</span>`
+      ? `<span class="price-hidden-badge" style="font-size:0.8rem;">${t('shippingPriceContact')}</span>`
       : formatDzd(item.totalPrice);
 
     return `
       <div class="cart-item-card">
-        <img src="${productImageUrl(item.image)}" alt="${currentLang === 'ar' ? item.nameAr : item.nameFr}" class="cart-item-img" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='${item.image || '/images/303-3.PNG'}';" />
-        <div class="cart-item-details">
-          <h4>${currentLang === 'ar' ? item.nameAr : item.nameFr}</h4>
-          <div class="cart-item-meta">
-            ${metaHtml}
+        <div class="cart-item-heading">
+          <div class="cart-item-details">
+            <span class="cart-model-kicker"><i class="fa-solid fa-box"></i> ${currentLang === 'ar' ? 'طلب بالكرتون' : 'Commande par carton'}</span>
+            <h4>${currentLang === 'ar' ? item.nameAr : item.nameFr}</h4>
+            <div class="cart-item-meta">${metaHtml}</div>
           </div>
-          <div class="cart-item-controls">
-            <div class="color-picker-box">
-              <label><i class="fa-solid fa-palette"></i> ${currentLang === 'ar' ? 'ألوان الكرطون:' : 'Couleurs:'}</label>
-              <span class="color-swatch-row">${renderColorSwatchDots(itemColors, product)}</span>
-              <small>${colorCompositionLabel(itemColors)}</small>
-            </div>
-            <div class="qty-stepper-box">
-              <button class="qty-btn dec-qty" data-index="${index}">-</button>
-              <span class="qty-val">${item.seriesQty} كرطون</span>
-              <button class="qty-btn inc-qty" data-index="${index}">+</button>
-            </div>
-          </div>
+          <img src="${productImageUrl(item.image)}" alt="${currentLang === 'ar' ? item.nameAr : item.nameFr}" class="cart-item-img" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='${item.image || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg'}';" />
         </div>
-        <div class="cart-item-side">
+        <div class="cart-item-controls">
+          <div class="qty-stepper-box" aria-label="${currentLang === 'ar' ? 'تحديد عدد الكراتين' : 'Choisir le nombre de cartons'}">
+            <button type="button" class="qty-btn dec-qty" data-index="${index}" aria-label="${currentLang === 'ar' ? 'إنقاص كرتون' : 'Retirer un carton'}">−</button>
+            <span class="qty-val">
+              <strong>${cartonQuantityLabel(item.seriesQty)}</strong>
+              <small>${item.seriesQty * item.pairsPerSeries} ${currentLang === 'ar' ? 'زوج' : 'paires'}</small>
+            </span>
+            <button type="button" class="qty-btn inc-qty" data-index="${index}" aria-label="${currentLang === 'ar' ? 'إضافة كرتون' : 'Ajouter un carton'}">+</button>
+          </div>
           <div class="cart-item-total">${itemTotalHtml}</div>
-          <button class="btn btn-danger-outline remove-cart-item-btn" data-index="${index}" title="حذف من السلة">
+          <button type="button" class="btn btn-danger-outline remove-cart-item-btn" data-index="${index}" title="حذف من السلة" aria-label="حذف المنتج من السلة">
             <i class="fa-solid fa-trash"></i>
           </button>
         </div>
@@ -756,8 +1048,20 @@ function renderCartModalItems() {
 }
 
 function openCartModal() {
+  if (checkoutModal?.classList.contains('active')) closeCheckoutModal();
   updateCartUI();
   cartModal.classList.add('active');
+  document.getElementById('floating-cart-btn')?.setAttribute('aria-expanded', 'true');
+}
+
+function closeCartModal() {
+  cartModal.classList.remove('active');
+  document.getElementById('floating-cart-btn')?.setAttribute('aria-expanded', 'false');
+}
+
+function closeCheckoutModal() {
+  checkoutModal.classList.remove('active');
+  document.body.classList.remove('checkout-active');
 }
 
 function openCheckoutFromCart() {
@@ -766,7 +1070,21 @@ function openCheckoutFromCart() {
     alert(t('emptyCartText'));
     return;
   }
-  cartModal.classList.remove('active');
+  if (window.JoulaneAnalytics) {
+    const contentIds = cart.map(item => item.productId).filter(Boolean);
+    window.JoulaneAnalytics.track('InitiateCheckout', {
+      content_ids: contentIds,
+      content_type: 'product',
+      contents: cart.map(item => ({
+        id: item.productId,
+        quantity: Number(item.seriesQty) || 1
+      })),
+      item_count: contentIds.length,
+      num_items: cart.reduce((sum, item) => sum + (Number(item.seriesQty) || 1), 0),
+      language: currentLang
+    });
+  }
+  closeCartModal();
 
   const isHidePrices = !!Store.getConfig()?.hideAllPrices;
   const preview = document.getElementById('checkout-product-preview');
@@ -775,13 +1093,13 @@ function openCheckoutFromCart() {
       <h4><i class="fa-solid fa-boxes-packing"></i> المنتجات المطلوبة بالسلة (${cart.length}):</h4>
       ${cart.map(item => `
         <div class="checkout-cart-item-row">
-          <img src="${productImageUrl(item.image)}" alt="${currentLang === 'ar' ? item.nameAr : item.nameFr}" class="checkout-item-thumb" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='${item.image || '/images/303-3.PNG'}';" />
+          <img src="${productImageUrl(item.image)}" alt="${currentLang === 'ar' ? item.nameAr : item.nameFr}" class="checkout-item-thumb" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='${item.image || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg'}';" />
           <div>
             <strong>${currentLang === 'ar' ? item.nameAr : item.nameFr}</strong>
-            <div class="text-muted" style="font-size:0.85rem;">اللون: ${item.color} | الكمية: ${item.seriesQty} كرطون (${item.seriesQty * item.pairsPerSeries} زوج)</div>
+            <div class="text-muted" style="font-size:0.85rem;">${currentLang === 'ar' ? 'الكمية' : 'Quantité'}: ${cartonQuantityLabel(item.seriesQty)} (${item.seriesQty * item.pairsPerSeries} ${currentLang === 'ar' ? 'زوج' : 'paires'})</div>
           </div>
           <div style="margin-inline-start: auto; font-weight: 800;" class="text-gold">
-            ${isHidePrices ? `<span class="price-hidden-badge" style="font-size:0.8rem;"><i class="fa-solid fa-lock"></i> عند الطلب</span>` : formatDzd(item.totalPrice)}
+            ${isHidePrices ? `<span class="price-hidden-badge" style="font-size:0.8rem;">${t('shippingPriceContact')}</span>` : formatDzd(item.totalPrice)}
           </div>
         </div>
       `).join('')}
@@ -790,6 +1108,7 @@ function openCheckoutFromCart() {
 
   updatePricingSummary();
   checkoutModal.classList.add('active');
+  document.body.classList.add('checkout-active');
 }
 
 function initWilayaDropdown() {
@@ -829,7 +1148,7 @@ function initEventListeners() {
   langToggle.addEventListener('click', () => {
     currentLang = currentLang === 'ar' ? 'fr' : 'ar';
     localStorage.setItem('joulane_lang', currentLang);
-    applyLanguage();
+    renderApp();
   });
 
   themeToggle.addEventListener('click', () => {
@@ -873,6 +1192,9 @@ function initEventListeners() {
 
   // Header Cart Button
   document.getElementById('header-cart-btn').addEventListener('click', openCartModal);
+
+  // Persistent floating cart button
+  document.getElementById('floating-cart-btn')?.addEventListener('click', openCartModal);
   
   // Mobile Sticky Bar Cart Button
   const stickyBtn = document.querySelector('.mobile-sticky-bar .btn');
@@ -927,17 +1249,50 @@ function initEventListeners() {
     updatePricingSummary();
   });
 
+  const checkoutPhoneInput = document.getElementById('customer-phone');
+  checkoutPhoneInput?.addEventListener('input', () => {
+    checkoutPhoneInput.value = checkoutPhoneInput.value.replace(/\D/g, '').slice(0, 10);
+    checkoutPhoneInput.setCustomValidity('');
+  });
   checkoutForm.addEventListener('submit', handleCheckoutSubmit);
 
   document.getElementById('close-product-modal').addEventListener('click', () => productModal.classList.remove('active'));
-  document.getElementById('close-cart-modal').addEventListener('click', () => cartModal.classList.remove('active'));
-  document.getElementById('close-checkout-modal').addEventListener('click', () => checkoutModal.classList.remove('active'));
+  document.getElementById('close-cart-modal').addEventListener('click', closeCartModal);
+  document.getElementById('close-checkout-modal').addEventListener('click', closeCheckoutModal);
   document.getElementById('close-success-btn').addEventListener('click', () => successModal.classList.remove('active'));
+  document.getElementById('copy-tracking-code-btn')?.addEventListener('click', () => {
+    const code = document.getElementById('success-tracking-code')?.textContent || '';
+    if (code) void copyText(code, 'تم نسخ رقم التتبع');
+  });
+  document.getElementById('copy-tracking-link-btn')?.addEventListener('click', () => {
+    const link = document.getElementById('success-tracking-link')?.value || '';
+    if (link) void copyText(link, 'تم نسخ رابط تتبع طلبك');
+  });
+  document.getElementById('download-order-pdf-btn')?.addEventListener('click', async () => {
+    if (!lastSuccessfulOrder) return;
+    await runReceiptAction('download-order-pdf-btn', () => downloadOrderReceipt(lastSuccessfulOrder));
+  });
+  document.getElementById('share-order-pdf-btn')?.addEventListener('click', async () => {
+    if (!lastSuccessfulOrder) return;
+    await runReceiptAction('share-order-pdf-btn', () => shareOrderReceipt(lastSuccessfulOrder));
+  });
 
   [productModal, cartModal, checkoutModal, successModal].forEach(modal => {
     modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.classList.remove('active');
+      if (e.target !== modal) return;
+      if (modal === cartModal) closeCartModal();
+      else if (modal === checkoutModal) closeCheckoutModal();
+      else modal.classList.remove('active');
     });
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const openModal = [successModal, checkoutModal, cartModal, productModal]
+      .find(modal => modal?.classList.contains('active'));
+    if (openModal === cartModal) closeCartModal();
+    else if (openModal === checkoutModal) closeCheckoutModal();
+    else openModal?.classList.remove('active');
   });
 }
 
@@ -945,64 +1300,56 @@ function openProductModal(productId) {
   const products = Store.getProducts();
   const product = products.find(p => p.id === productId) || products[0];
   selectedProduct = product;
+  const isUnavailable = product.isAvailable === false;
+  trackMetaEvent('ViewContent', product);
 
   const content = document.getElementById('product-modal-content');
-  const colors = product.colors ? (product.colors[currentLang] || product.colors.ar || []) : [];
   const features = product.features
     ? (product.features[currentLang] || product.features.ar || []).map(normalizeDeliveryCopy)
     : [];
 
   content.innerHTML = `
     <div class="product-modal-media">
-      <img src="${productImageUrl(product)}" alt="${productText(product, 'name')}" class="modal-product-img" decoding="async" onerror="this.onerror=null; this.src='${product.image || '/images/303-3.PNG'}';" />
+      <img src="${productImageUrl(product)}" alt="${productText(product, 'name')}" class="modal-product-img" decoding="async" onerror="this.onerror=null; this.src='${product.image || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg'}';" />
     </div>
     <div class="product-modal-info">
       <span class="product-cat">${categoryLabel(product.category)}</span>
       <h2>${productText(product, 'name')}</h2>
       <div class="price-box">
         ${Store.getConfig()?.hideAllPrices ? `
-          <span class="current-price price-hidden-badge"><i class="fa-solid fa-lock"></i> ${currentLang === 'ar' ? 'السعر عند الطلب' : 'Prix sur demande'}</span>
+          <span class="current-price price-hidden-badge">${t('shippingPriceContact')}</span>
         ` : `
           <span class="current-price">${formatDzd(product.seriesPrice)}</span>
           ${product.oldPrice ? `<span class="old-price">${formatDzd(product.oldPrice)}</span>` : ''}
         `}
       </div>
-      <p class="modal-series-info"><i class="fa-solid fa-boxes-stacked"></i> ${template('seriesSizesLine', { pairs: product.pairsPerSeries || 6 })}</p>
+      <p class="modal-series-info"><i class="fa-solid fa-boxes-stacked"></i> ${template('seriesSizesLine', { pairs: product.pairsPerSeries || 18 })}</p>
       <p>${productText(product, 'description')}</p>
       
-      ${colors.length ? `
-        <div class="product-carton-colors margin-top-16">
-          <label style="display:block; margin-bottom: 8px;"><i class="fa-solid fa-palette"></i> ${currentLang === 'ar' ? 'ألوان الكرطون:' : 'Couleurs du carton:'}</label>
-          <span class="color-swatch-row">${renderColorSwatchDots(colors, product)}</span>
-          <small>${colorCompositionLabel(colors)}</small>
-        </div>
-      ` : ''}
-
       ${features.length ? `<ul class="modal-features">${features.map(f => `<li><i class="fa-solid fa-check"></i> ${f}</li>`).join('')}</ul>` : ''}
       
-      <button class="btn btn-gold btn-block btn-lg margin-top-16 modal-add-cart-btn" data-id="${product.id}">
-        <i class="fa-solid fa-cart-plus"></i> ${t('modalOrderButton')}
+      <button class="btn btn-gold btn-block btn-lg margin-top-16 modal-add-cart-btn" data-id="${product.id}" ${isUnavailable ? 'disabled style="opacity:0.6; cursor:not-allowed;"' : ''}>
+        <i class="fa-solid ${isUnavailable ? 'fa-ban' : 'fa-cart-plus'}"></i> ${isUnavailable ? (currentLang === 'ar' ? 'الموديل غير متوفر' : 'Modèle indisponible') : t('modalOrderButton')}
       </button>
     </div>
   `;
 
-  content.querySelector('.modal-add-cart-btn').addEventListener('click', () => {
-    const allColors = availableProductColors(product);
-    const colorsToAdd = allColors.length ? allColors : ['افتراضي'];
-    Store.addToCart(product, colorsToAdd, 1);
-    productModal.classList.remove('active');
-    showToast(t('addedToCartToast'));
-    openCartModal();
-  });
+  if (!isUnavailable) {
+    content.querySelector('.modal-add-cart-btn').addEventListener('click', () => {
+      if (addProductToCart(product)) {
+        productModal.classList.remove('active');
+      }
+    });
+  }
 
   productModal.classList.add('active');
 }
 
 function updateDeliveryLabels() {
-  if (!currentWilaya) {
-    document.getElementById('home-delivery-rate').textContent = t('chooseWilaya');
-    document.getElementById('desk-delivery-rate').textContent = t('chooseWilaya');
-  }
+  const shippingRates = Store.getShippingRates();
+  const label = shippingPricesAreVisible(shippingRates) ? t('chooseWilaya') : t('shippingPriceContact');
+  document.getElementById('home-delivery-rate').textContent = label;
+  document.getElementById('desk-delivery-rate').textContent = label;
 }
 
 function updatePricingSummary() {
@@ -1012,13 +1359,20 @@ function updatePricingSummary() {
 
   const wilayaCode = parseInt(wilayaSelect.value, 10);
   const shippingRates = Store.getShippingRates();
+  const showShippingPrices = shippingPricesAreVisible(shippingRates);
   const wilayaRate = shippingRates[wilayaCode] || (wilayaCode ? (WILAYAS.find(w => w.code === wilayaCode) || {}) : null);
 
   let shippingFee = 0;
   if (wilayaRate) {
-    shippingFee = deliveryType === 'home' ? (wilayaRate.homePrice || 650) : (wilayaRate.deskPrice || 400);
-    document.getElementById('home-delivery-rate').textContent = formatDzd(wilayaRate.homePrice || 650, true);
-    document.getElementById('desk-delivery-rate').textContent = formatDzd(wilayaRate.deskPrice || 400, true);
+    const homePrice = shippingRateAmount(wilayaRate, 'homePrice');
+    const deskPrice = shippingRateAmount(wilayaRate, 'deskPrice');
+    shippingFee = showShippingPrices ? (deliveryType === 'home' ? homePrice : deskPrice) : 0;
+    document.getElementById('home-delivery-rate').textContent = showShippingPrices
+      ? formatDzd(homePrice, true)
+      : t('shippingPriceContact');
+    document.getElementById('desk-delivery-rate').textContent = showShippingPrices
+      ? formatDzd(deskPrice, true)
+      : t('shippingPriceContact');
   } else {
     updateDeliveryLabels();
   }
@@ -1030,13 +1384,15 @@ function updatePricingSummary() {
 
   document.getElementById('summary-series-qty').textContent = template('summaryQty', { series: seriesCount, pairs: pairsCount });
   document.getElementById('summary-product-price').textContent = isHidePrices
-    ? (currentLang === 'ar' ? 'السعر عند الطلب' : 'Prix sur demande')
+    ? t('shippingPriceContact')
     : formatDzd(productsSubtotal);
 
-  document.getElementById('summary-shipping-fee').textContent = formatDzd(wilayaRate ? shippingFee : 0, true);
+  document.getElementById('summary-shipping-fee').textContent = showShippingPrices
+    ? formatDzd(wilayaRate ? shippingFee : 0, true)
+    : t('shippingPriceContact');
   
-  document.getElementById('summary-total-price').textContent = isHidePrices
-    ? (currentLang === 'ar' ? 'السعر عند الطلب' : 'Prix sur demande')
+  document.getElementById('summary-total-price').textContent = isHidePrices || !showShippingPrices
+    ? t('shippingPriceContact')
     : formatDzd(grandTotal);
 }
 
@@ -1049,11 +1405,20 @@ async function handleCheckoutSubmit(e) {
   }
 
   const customerName = document.getElementById('customer-name').value.trim();
-  const phone = document.getElementById('customer-phone').value.trim();
+  const phoneInput = document.getElementById('customer-phone');
+  const phone = phoneInput.value.replace(/\D/g, '').slice(0, 10);
+  phoneInput.value = phone;
   const wilayaCode = parseInt(wilayaSelect.value, 10);
   const commune = communeSelect.value;
   const rawAddress = document.getElementById('customer-address').value.trim();
   const address = deliveryType === 'home' ? rawAddress : (rawAddress || (currentLang === 'ar' ? 'الاستلام من مقر مكتب التوصيل بالولاية' : 'Retrait au bureau de livraison'));
+
+  if (!/^0[567]\d{8}$/.test(phone)) {
+    phoneInput.setCustomValidity(t('invalidPhone'));
+    phoneInput.reportValidity();
+    phoneInput.setCustomValidity('');
+    return;
+  }
 
   if (!wilayaCode || !commune) {
     alert(t('invalidLocation'));
@@ -1061,13 +1426,20 @@ async function handleCheckoutSubmit(e) {
   }
 
   const shippingRates = Store.getShippingRates();
+  const showShippingPrices = shippingPricesAreVisible(shippingRates);
   const wilayaData = WILAYAS.find(w => w.code === wilayaCode);
   const wilayaRate = shippingRates[wilayaCode] || wilayaData;
 
-  const shippingFee = deliveryType === 'home' ? (wilayaRate.homePrice || 650) : (wilayaRate.deskPrice || 400);
+  const shippingFee = showShippingPrices
+    ? shippingRateAmount(wilayaRate, deliveryType === 'home' ? 'homePrice' : 'deskPrice')
+    : 0;
   const productPriceTotal = Store.getCartTotal();
   const grandTotal = productPriceTotal + shippingFee;
-  const orderRef = `JOU-${Math.floor(1000 + Math.random() * 9000)}`;
+  const orderCreatedAt = new Date();
+  const orderRandomPart = globalThis.crypto?.getRandomValues
+    ? globalThis.crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase()
+    : Math.random().toString(36).slice(2, 9).toUpperCase();
+  const orderRef = `JOU-${orderCreatedAt.getTime().toString(36).toUpperCase()}-${orderRandomPart}`;
 
   const deliveryLabel = t(deliveryType === 'home' ? 'homeDeliveryShort' : 'deskDeliveryShort');
   const wilayaName = currentLang === 'ar' ? wilayaData.nameAr : wilayaData.nameFr;
@@ -1079,17 +1451,23 @@ async function handleCheckoutSubmit(e) {
     image: item.image,
     color: item.color,
     seriesQty: item.seriesQty,
-    pairsCount: item.seriesQty * item.pairsPerSeries,
+    seriesPrice: Number(item.seriesPrice) || 0,
+    pairsPerSeries: Number(item.pairsPerSeries) || 18,
+    pairsCount: item.seriesQty * (Number(item.pairsPerSeries) || 18),
     price: item.totalPrice
   }));
 
   const firstItem = cart[0];
   const summaryProductName = cart.length === 1 ? firstItem.nameAr : `طلب سلة موحد (${cart.length} موديلات)`;
   const totalSeriesCount = Store.getCartCount();
+  const trackingCode = createTrackingCode();
 
   const newOrder = {
     id: orderRef,
-    timestamp: new Date().toLocaleString(currentLang === 'ar' ? 'ar-DZ' : 'fr-DZ'),
+    trackingCode,
+    timestamp: orderCreatedAt.toLocaleString(currentLang === 'ar' ? 'ar-DZ' : 'fr-DZ'),
+    createdAt: orderCreatedAt.toISOString(),
+    updatedAt: orderCreatedAt.toISOString(),
     customerName,
     phone,
     wilaya: wilayaName,
@@ -1104,7 +1482,11 @@ async function handleCheckoutSubmit(e) {
     productPrice: productPriceTotal,
     shippingFee,
     totalAmount: grandTotal,
-    status: "New"
+    pricesHidden: !!Store.getConfig()?.hideAllPrices,
+    deliveryPriceHidden: !showShippingPrices,
+    attribution: marketingAttributionSnapshot(),
+    status: "New",
+    history: [{ action: 'status_changed', status: 'New', at: orderCreatedAt.toISOString(), by: 'storefront' }]
   };
 
   const orderSynced = await Store.addOrder(newOrder);
@@ -1116,22 +1498,46 @@ async function handleCheckoutSubmit(e) {
   Store.clearCart();
   updateAdminBadgeCount();
 
-  if (window.fbq) {
-    window.fbq('track', 'Purchase', {
-      value: grandTotal,
-      currency: 'DZD',
+  if (window.JoulaneAnalytics) {
+    const contentIds = formattedItems.map(item => item.productId).filter(Boolean);
+    const eventParams = {
+      content_ids: contentIds,
       content_name: summaryProductName,
-      content_type: 'product'
+      content_type: 'product',
+      contents: formattedItems.map(item => ({
+        id: item.productId,
+        quantity: Number(item.seriesQty) || 1,
+        item_price: Number(item.seriesPrice) > 0 ? Number(item.seriesPrice) : undefined
+      })),
+      item_count: contentIds.length,
+      num_items: totalSeriesCount,
+      language: currentLang,
+      status: orderSynced ? 'synced' : 'queued'
+    };
+    if (!newOrder.pricesHidden && productPriceTotal > 0) {
+      eventParams.value = productPriceTotal;
+      eventParams.currency = 'DZD';
+    }
+    window.JoulaneAnalytics.track('Lead', eventParams, {
+      eventID: `lead-${newOrder.id}`
+    });
+    window.JoulaneAnalytics.trackCustom('WholesaleOrderSubmitted', eventParams, {
+      eventID: `wholesale-${newOrder.id}`
     });
   }
 
-  checkoutModal.classList.remove('active');
+  closeCheckoutModal();
   checkoutForm.reset();
-  showSuccessModal(newOrder, wilayaName, formattedItems);
+  const notificationTask = orderSynced
+    ? notifyOrderServer(newOrder.id)
+    : Promise.resolve({ status: 'queued' });
+  showSuccessModal(newOrder, wilayaName, formattedItems, notificationTask);
 }
 
-function showSuccessModal(order, wilayaName, items) {
+function showSuccessModal(order, wilayaName, items, notificationTask) {
+  lastSuccessfulOrder = order;
   const isHidePrices = !!Store.getConfig()?.hideAllPrices;
+  const isDeliveryPriceHidden = order.deliveryPriceHidden === true;
   const fields = {
     customer: currentLang === 'ar' ? 'الزبون / المحل:' : 'Client / Boutique:',
     phone: currentLang === 'ar' ? 'الهاتف:' : 'Telephone:',
@@ -1142,23 +1548,31 @@ function showSuccessModal(order, wilayaName, items) {
   };
   const config = Store.getConfig();
   document.getElementById('success-order-id').textContent = `#${order.id}`;
+  const orderTrackingLink = trackingLink(order.trackingCode);
+  const trackingCodeNode = document.getElementById('success-tracking-code');
+  const trackingLinkNode = document.getElementById('success-tracking-link');
+  if (trackingCodeNode) trackingCodeNode.textContent = order.trackingCode;
+  if (trackingLinkNode) trackingLinkNode.value = orderTrackingLink;
 
   const itemsHtml = items.map(item => `
     <div style="padding: 6px 0; border-bottom: 1px dashed var(--line);">
-      📌 <strong>${item.nameAr}</strong> (${item.color}) - <span>${item.seriesQty} كرطون</span> ${!isHidePrices ? `= <strong>${formatDzd(item.price)}</strong>` : ''}
+      📌 <strong>${item.nameAr}</strong> - <span>${cartonQuantityLabel(item.seriesQty)}</span> ${!isHidePrices ? `= <strong>${formatDzd(item.price)}</strong>` : ''}
     </div>
   `).join('');
 
-  const totalHtml = isHidePrices
-    ? (currentLang === 'ar' ? 'تحديد السعر عند التواصل (السعر مخفي)' : 'Prix sur demande')
+  const totalHtml = isHidePrices || isDeliveryPriceHidden
+    ? t('shippingPriceContact')
     : formatDzd(order.totalAmount);
+  const deliveryPriceHtml = isDeliveryPriceHidden
+    ? t('shippingPriceContact')
+    : formatDzd(order.shippingFee, true);
 
   document.getElementById('success-summary-box').innerHTML = `
     <div class="summary-field"><span>${fields.customer}</span><strong>${order.customerName}</strong></div>
     <div class="summary-field"><span>${fields.phone}</span><strong>${order.phone}</strong></div>
     <div class="summary-field"><span>${fields.location}</span><strong>${wilayaName} - ${order.commune}</strong></div>
     <div class="summary-field"><span>${fields.address}</span><strong>${order.address}</strong></div>
-    <div class="summary-field"><span>${fields.delivery}</span><strong>${order.deliveryLabel} (${formatDzd(order.shippingFee, true)})</strong></div>
+    <div class="summary-field"><span>${fields.delivery}</span><strong>${order.deliveryLabel} — ${deliveryPriceHtml}</strong></div>
     <div style="margin-top: 10px;">
       <span style="font-weight: 800;">المنتجات المطلوبة بالطلب:</span>
       <div style="margin-top: 6px;">${itemsHtml}</div>
@@ -1168,30 +1582,92 @@ function showSuccessModal(order, wilayaName, items) {
 
   const cleanWa = (config.whatsapp || '213660125123').replace(/\D/g, '');
   
-  const itemsTextList = items.map((item, i) => `${i + 1}. *${item.nameAr}* (${item.color}) - ${item.seriesQty} كرطون ${!isHidePrices ? `(${formatDzd(item.price)})` : ''}`).join('\n');
+  const itemsTextList = items.map((item, i) => `${i + 1}. *${item.nameAr}* - ${cartonQuantityLabel(item.seriesQty)} ${!isHidePrices ? `(${formatDzd(item.price)})` : ''}`).join('\n');
 
   const messageLines = [
     `*${t('whatsappMessage')}*`,
     `--------------------------`,
     `📌 *المرجع:* #${order.id}`,
+    `📍 *تتبع الطلب:* ${orderTrackingLink}`,
     `👤 *الزبون:* ${order.customerName}`,
     `📞 *الهاتف:* ${order.phone}`,
     `📍 *المكان:* ${wilayaName} - ${order.commune}`,
     `🏠 *العنوان:* ${order.address}`,
-    `🚚 *التوصيل:* ${order.deliveryLabel} (${formatDzd(order.shippingFee, true)})`,
+    `🚚 *التوصيل عبر كازيتور:* ${order.deliveryLabel} — ${deliveryPriceHtml}`,
     `--------------------------`,
     `👠 *المنتجات المطلوبة (${items.length}):*`,
     itemsTextList,
     `--------------------------`,
-    isHidePrices
-      ? `💰 *المجموع:* تحديد السعر عند التواصل`
+    isHidePrices || isDeliveryPriceHidden
+      ? `💰 *المجموع:* يتم تحديد السعر عند التواصل`
       : `💰 *المجموع النهائي عند الاستلام:* ${formatDzd(order.totalAmount)}`
   ];
 
   const waBtn = document.getElementById('whatsapp-order-btn');
   waBtn.href = `https://wa.me/${cleanWa}?text=${encodeURIComponent(messageLines.join('\n'))}`;
 
+  const shareButton = document.getElementById('share-order-pdf-btn');
+  if (shareButton) shareButton.hidden = !canShareOrderReceipt();
+  updateWhatsappNotificationState('sending');
   successModal.classList.add('active');
+
+  Promise.resolve(notificationTask)
+    .then(result => updateWhatsappNotificationState(result?.status || 'pending_setup'))
+    .catch(() => updateWhatsappNotificationState(navigator.onLine ? 'pending_setup' : 'queued'));
+}
+
+async function notifyOrderServer(orderId) {
+  try {
+    const notificationUrl = Capacitor.isNativePlatform()
+      ? 'https://www.joulanefashion.com/api/order-notification'
+      : '/api/order-notification';
+    const response = await fetch(notificationUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return { status: response.status === 503 ? 'pending_setup' : (navigator.onLine ? 'pending_setup' : 'queued') };
+    }
+    return payload;
+  } catch (_) {
+    return { status: navigator.onLine ? 'pending_setup' : 'queued' };
+  }
+}
+
+function updateWhatsappNotificationState(status) {
+  const element = document.getElementById('whatsapp-notification-status');
+  if (!element) return;
+  const normalized = ['sent', 'already_sent'].includes(status)
+    ? 'sent'
+    : status === 'queued' ? 'queued' : status === 'sending' || status === 'processing' ? 'sending' : 'pending_setup';
+  const icon = normalized === 'sent'
+    ? 'fa-circle-check'
+    : normalized === 'sending' ? 'fa-spinner fa-spin' : normalized === 'queued' ? 'fa-clock' : 'fa-triangle-exclamation';
+  const translationKey = normalized === 'sent'
+    ? 'whatsappSent'
+    : normalized === 'sending' ? 'whatsappSending' : normalized === 'queued' ? 'whatsappQueued' : 'whatsappPendingSetup';
+  element.className = `whatsapp-notification-status is-${normalized}`;
+  element.innerHTML = `<i class="fa-solid ${icon}"></i><span>${t(translationKey)}</span>`;
+}
+
+async function runReceiptAction(buttonId, action) {
+  const button = document.getElementById(buttonId);
+  if (!button || button.disabled) return;
+  const original = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+  try {
+    await action();
+  } catch (error) {
+    if (error?.name !== 'AbortError') {
+      showToast(currentLang === 'ar' ? 'تعذر إنشاء الفاتورة. حاول مرة أخرى.' : 'Impossible de creer la facture.', 'error');
+    }
+  } finally {
+    button.disabled = false;
+    button.innerHTML = original;
+  }
 }
 
 function updateAdminBadgeCount() {

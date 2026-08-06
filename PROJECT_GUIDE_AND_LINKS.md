@@ -7,10 +7,10 @@
 ## 🌐 1. روابط المتجر الأساسية (الروابط الحية والمحلية)
 
 ### 🛍️ المتجر المباشر على الإنترنت (الذي يراه الزبائن):
-- **رابط المتجر:** [https://joulane-fashiondz.vercel.app/](https://joulane-fashiondz.vercel.app/)
-- **رابط تطبيق لوحة التحكم الرئيسية أونلاين:** [https://joulane-fashiondz.vercel.app/admin.html](https://joulane-fashiondz.vercel.app/admin.html)
-- **رابط تطبيق لوحة إدارة المخزون المخصصة للعمال أونلاين:** [https://joulane-fashiondz.vercel.app/stock.html](https://joulane-fashiondz.vercel.app/stock.html)
-- **رابط تطبيق أندرويد لتثبيته فوراً (Stock Joulane APK):** [https://joulane-fashiondz.vercel.app/Stock_Joulane.apk](https://joulane-fashiondz.vercel.app/Stock_Joulane.apk)
+- **رابط المتجر:** [https://www.joulanefashion.com/](https://www.joulanefashion.com/)
+- **رابط تطبيق لوحة التحكم الرئيسية أونلاين:** [https://www.joulanefashion.com/admin.html](https://www.joulanefashion.com/admin.html)
+- **رابط تطبيق لوحة إدارة المخزون المخصصة للعمال أونلاين:** [https://www.joulanefashion.com/stock.html](https://www.joulanefashion.com/stock.html)
+- **رابط تطبيق أندرويد لتثبيته فوراً (Stock Joulane APK):** [https://www.joulanefashion.com/Stock_Joulane.apk](https://www.joulanefashion.com/Stock_Joulane.apk)
 - **مسار ملف الـ APK الحقيقي على سطح مكتب حاسوبك:** `C:\Users\GAMER ZONE\Desktop\Joulane\Stock_Joulane.apk`
   - 🔑 **رمز المرور الافتراضي للوحات:** `1234`
 

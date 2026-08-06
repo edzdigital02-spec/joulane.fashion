@@ -1,4 +1,4 @@
-const CACHE_NAME = 'joulane-pwa-v4';
+const CACHE_NAME = 'joulane-pwa-v14';
 const ASSETS = [
   '/',
   '/stock.html',
@@ -6,13 +6,13 @@ const ASSETS = [
   '/manifest.json',
   '/manifest-stock.json',
   '/manifest-admin.json',
-  '/images/logo.png',
-  '/images/icon-192.png',
-  '/images/icon-512.png',
-  '/images/icon-maskable-192.png',
-  '/images/icon-maskable-512.png',
-  '/images/joulane-cover.png',
-  '/images/303-3.PNG'
+  'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/skilwjfxosy60qtgwkxw.jpg',
+  'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955418/joulane/products/opsarwpedahajpkgostn.png',
+  'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955418/joulane/products/ngi3kklpj1yduujoqt4s.png',
+  'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955418/joulane/products/hc5wkqa1gaomvsmt5qek.png',
+  'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955418/joulane/products/k4flmagfquaghtdm8eer.png',
+  'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/qvyvxxiae7cjygigkrtw.jpg',
+  'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg'
 ];
 
 self.addEventListener('install', (event) => {
@@ -54,7 +54,10 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
 
       if (event.request.mode === 'navigate') {
-        const fallback = await caches.match('/');
+        const fallbackPath = requestUrl.pathname.endsWith('/admin.html')
+          ? '/admin.html'
+          : requestUrl.pathname.endsWith('/stock.html') ? '/stock.html' : '/';
+        const fallback = await caches.match(fallbackPath);
         return fallback || new Response('Offline', {
           status: 503,
           headers: { 'Content-Type': 'text/plain; charset=utf-8' }

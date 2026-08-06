@@ -118,6 +118,12 @@ export const SupabaseManager = {
         if (PUBLIC_RECORDS.has(row.id)) result[row.id] = row.data;
       });
 
+      const { data: productOrderStats, error: productOrderStatsError } = await supabaseClient
+        .rpc('joulane_public_product_order_stats');
+      if (!productOrderStatsError && productOrderStats && typeof productOrderStats === 'object') {
+        result.product_order_stats = productOrderStats;
+      }
+
       const { data: directory, error: directoryError } = await supabaseClient
         .rpc('joulane_staff_directory');
       if (!directoryError && Array.isArray(directory)) result.users = directory;
@@ -138,6 +144,60 @@ export const SupabaseManager = {
     } catch (error) {
       console.error('Supabase fetch exception:', error);
       return null;
+    }
+  },
+
+  async fetchOrders() {
+    if (!supabaseClient || !secureToken || secureSurface !== 'admin') return null;
+    try {
+      const { data, error } = await supabaseClient
+        .rpc('joulane_secure_data', { p_token: secureToken });
+      if (error) {
+        console.warn('Secure orders refresh failed:', error);
+        saveSecureSession('', '');
+        return null;
+      }
+      const ordersRow = (data || []).find(row => row?.id === 'orders');
+      if (!ordersRow) return null;
+      return Array.isArray(ordersRow.data) ? ordersRow.data : [];
+    } catch (error) {
+      console.error('Secure orders refresh exception:', error);
+      return null;
+    }
+  },
+
+  async fetchStockProData() {
+    if (!supabaseClient || !secureToken || secureSurface !== 'stock') return null;
+    try {
+      const { data, error } = await supabaseClient
+        .rpc('joulane_stock_pro_data', { p_token: secureToken });
+      if (error) {
+        console.error('Stock Pro data fetch failed:', error);
+        return null;
+      }
+      return (data || []).reduce((result, row) => {
+        result[row.id] = row.data;
+        return result;
+      }, {});
+    } catch (error) {
+      console.error('Stock Pro data fetch exception:', error);
+      return null;
+    }
+  },
+
+  async saveStockProData(key, payload) {
+    if (!supabaseClient || !secureToken || secureSurface !== 'stock') return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_stock_pro_save', {
+        p_token: secureToken,
+        p_id: key,
+        p_data: payload
+      });
+      if (error) console.error(`Stock Pro save failed for ${key}:`, error);
+      return !error && data === true;
+    } catch (error) {
+      console.error(`Stock Pro save exception for ${key}:`, error);
+      return false;
     }
   },
 
@@ -178,20 +238,130 @@ export const SupabaseManager = {
   async recordStockMovement(productId, newQuantity, movement) {
     if (!supabaseClient || !secureToken) return false;
     try {
-      const { data, error } = await supabaseClient.rpc('joulane_stock_movement', {
+      const { data, error } = await supabaseClient.rpc('joulane_stock_movement_v2', {
         p_token: secureToken,
         p_product_id: productId,
         p_new_qty: newQuantity,
         p_log: movement
       });
       if (error) {
-        if (error.code === 'PGRST202' || /joulane_stock_movement/i.test(error.message || '')) return null;
         console.error('Atomic stock movement failed:', error);
         return false;
       }
-      return data === true;
+      return data && typeof data === 'object' ? data : false;
     } catch (error) {
       console.error('Atomic stock movement exception:', error);
+      return false;
+    }
+  },
+
+  async resetAllStock() {
+    if (!supabaseClient || !secureToken) return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_reset_all_stock', {
+        p_token: secureToken
+      });
+      if (error) {
+        console.error('Full stock reset failed:', error);
+        return false;
+      }
+      return data && typeof data === 'object' ? data : false;
+    } catch (error) {
+      console.error('Full stock reset exception:', error);
+      return false;
+    }
+  },
+
+  async createStockSnapshot(reason = 'manual') {
+    if (!supabaseClient || !secureToken) return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_stock_snapshot_create', {
+        p_token: secureToken,
+        p_reason: reason
+      });
+      if (error) console.error('Stock snapshot creation failed:', error);
+      return !error && data ? data : false;
+    } catch (error) {
+      console.error('Stock snapshot creation exception:', error);
+      return false;
+    }
+  },
+
+  async restoreStockSnapshot(snapshotId) {
+    if (!supabaseClient || !secureToken) return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_stock_snapshot_restore', {
+        p_token: secureToken,
+        p_snapshot_id: snapshotId
+      });
+      if (error) console.error('Stock snapshot restore failed:', error);
+      return !error && data ? data : false;
+    } catch (error) {
+      console.error('Stock snapshot restore exception:', error);
+      return false;
+    }
+  },
+
+  async reviewStockApproval(approvalId, decision) {
+    if (!supabaseClient || !secureToken) return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_stock_approval_review', {
+        p_token: secureToken,
+        p_approval_id: approvalId,
+        p_decision: decision
+      });
+      if (error) console.error('Stock approval review failed:', error);
+      return !error && data ? data : false;
+    } catch (error) {
+      console.error('Stock approval review exception:', error);
+      return false;
+    }
+  },
+
+  async transferStockLocation(productId, fromLocation, toLocation, quantity) {
+    if (!supabaseClient || !secureToken) return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_stock_location_transfer', {
+        p_token: secureToken,
+        p_product_id: productId,
+        p_from_location: fromLocation,
+        p_to_location: toLocation,
+        p_quantity: quantity
+      });
+      if (error) console.error('Stock location transfer failed:', error);
+      return !error && data ? data : false;
+    } catch (error) {
+      console.error('Stock location transfer exception:', error);
+      return false;
+    }
+  },
+
+  async commitStockAudit(audit) {
+    if (!supabaseClient || !secureToken) return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_stock_audit_commit', {
+        p_token: secureToken,
+        p_audit: audit
+      });
+      if (error) console.error('Stock audit commit failed:', error);
+      return !error && data ? data : false;
+    } catch (error) {
+      console.error('Stock audit commit exception:', error);
+      return false;
+    }
+  },
+
+  async undoStockMovement(logId) {
+    if (!supabaseClient || !secureToken) return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_stock_undo', {
+        p_token: secureToken,
+        p_log_id: logId
+      });
+      if (error) console.error('Stock movement undo failed:', error);
+      return !error && data ? data : false;
+    } catch (error) {
+      console.error('Stock movement undo exception:', error);
       return false;
     }
   },
@@ -221,6 +391,80 @@ export const SupabaseManager = {
       return !error && data === true;
     } catch (error) {
       console.error('Order submission exception:', error);
+      return false;
+    }
+  },
+
+  async trackOrder(trackingCode) {
+    if (!supabaseClient) return { status: 'unavailable' };
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_track_order', {
+        p_tracking_code: trackingCode
+      });
+      if (error) {
+        console.error('Order tracking failed:', error);
+        return { status: 'unavailable' };
+      }
+      return data && typeof data === 'object' ? data : { status: 'not_found' };
+    } catch (error) {
+      console.error('Order tracking exception:', error);
+      return { status: 'unavailable' };
+    }
+  },
+
+  async updateOrder(orderId, updates, expectedUpdatedAt = null) {
+    if (!supabaseClient || !secureToken || secureSurface !== 'admin') return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_order_update', {
+        p_token: secureToken,
+        p_order_id: orderId,
+        p_updates: updates,
+        p_expected_updated_at: expectedUpdatedAt || null
+      });
+      if (error) {
+        console.error('Atomic order update failed:', error);
+        return false;
+      }
+      return data && typeof data === 'object' ? data : false;
+    } catch (error) {
+      console.error('Atomic order update exception:', error);
+      return false;
+    }
+  },
+
+  async deleteOrder(orderId, expectedUpdatedAt = null) {
+    if (!supabaseClient || !secureToken || secureSurface !== 'admin') return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_order_delete', {
+        p_token: secureToken,
+        p_order_id: orderId,
+        p_expected_updated_at: expectedUpdatedAt || null
+      });
+      if (error) {
+        console.error('Atomic order deletion failed:', error);
+        return false;
+      }
+      return data && typeof data === 'object' ? data : false;
+    } catch (error) {
+      console.error('Atomic order deletion exception:', error);
+      return false;
+    }
+  },
+
+  async clearOrders(orderIds) {
+    if (!supabaseClient || !secureToken || secureSurface !== 'admin') return false;
+    try {
+      const { data, error } = await supabaseClient.rpc('joulane_orders_clear', {
+        p_token: secureToken,
+        p_order_ids: Array.isArray(orderIds) ? orderIds : []
+      });
+      if (error) {
+        console.error('Atomic order clearing failed:', error);
+        return false;
+      }
+      return data && typeof data === 'object' ? data : false;
+    } catch (error) {
+      console.error('Atomic order clearing exception:', error);
       return false;
     }
   },

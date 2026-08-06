@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Joulane Fashion" />
   <link rel="manifest" href="/manifest-stock.json" />
-  <link rel="icon" href="/images/icon-192.png" type="image/png" />
+  <link rel="icon" href="https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955418/joulane/products/opsarwpedahajpkgostn.png" type="image/png" />
   <script>
     document.documentElement.dataset.theme = localStorage.getItem('joulane_theme') || 'dark';
   </script>
@@ -21,11 +21,24 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
+          const refreshKey = 'joulane_sw_refreshing';
+          const wasRefreshing = sessionStorage.getItem(refreshKey) === '1';
+          if (wasRefreshing) sessionStorage.removeItem(refreshKey);
+
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (wasRefreshing || sessionStorage.getItem(refreshKey) === '1') return;
+            sessionStorage.setItem(refreshKey, '1');
+            window.location.reload();
+          });
+
           const current = await navigator.serviceWorker.getRegistration('/');
           if (current?.active && !current.active.scriptURL.endsWith('/sw.js')) {
             await current.unregister();
           }
-          await navigator.serviceWorker.register('/sw.js');
+          const registration = await navigator.serviceWorker.register('/sw.js', {
+            updateViaCache: 'none'
+          });
+          await registration.update();
         } catch (err) {
           console.log('SW reg error:', err);
         }
@@ -35,7 +48,7 @@
       window.location.hash = '#stock';
     }
   </script>
-  <link rel="apple-touch-icon" href="/images/logo.png" />
+  <link rel="apple-touch-icon" href="https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/skilwjfxosy60qtgwkxw.jpg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -56,7 +69,7 @@
     <header class="main-header">
       <div class="container header-content">
         <a class="logo-box" href="#catalog" aria-label="JOULANE Fashion">
-          <img src="/images/logo.png" alt="JOULANE Fashion" class="brand-logo" decoding="async" />
+          <img src="https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/skilwjfxosy60qtgwkxw.jpg" alt="JOULANE Fashion" class="brand-logo" decoding="async" />
           <span>
             <strong class="brand-title">JOULANE</strong>
             <small class="brand-sub" data-i18n="brandSub">Fashion - أحذية نسائية بالجملة</small>
@@ -82,7 +95,7 @@
 
     <section class="cover-strip">
       <div class="container">
-        <img src="/images/joulane-cover.png" alt="واجهة Joulane Fashion للأحذية النسائية" class="brand-cover-img" decoding="async" />
+        <img src="https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/qvyvxxiae7cjygigkrtw.jpg" alt="واجهة Joulane Fashion للأحذية النسائية" class="brand-cover-img" decoding="async" />
       </div>
     </section>
 
@@ -103,7 +116,7 @@
           </div>
         </div>
         <div class="hero-media">
-          <img src="/images/303-3.PNG" alt="أحذية JOULANE" class="hero-img" decoding="async" fetchpriority="high" />
+          <img src="https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg" alt="أحذية JOULANE" class="hero-img" decoding="async" fetchpriority="high" />
           <div class="floating-badge">
             <strong>36-41</strong>
             <span data-i18n="seriesSizes">كرطون كامل</span>
@@ -164,7 +177,7 @@
     <footer class="main-footer">
       <div class="container footer-content">
         <div>
-          <img src="/images/logo.png" alt="JOULANE Fashion" class="footer-logo" />
+          <img src="https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/skilwjfxosy60qtgwkxw.jpg" alt="JOULANE Fashion" class="footer-logo" />
           <h3>JOULANE Fashion</h3>
           <p data-i18n="footerText">بيع أحذية نسائية بالجملة يد أولى، جودة عالية، أسعار تنافسية، وتوصيل لجميع الولايات.</p>
         </div>
@@ -202,7 +215,7 @@
         <div class="modal-drag-handle"></div>
         <button class="modal-close" id="close-cart-modal" aria-label="إغلاق">&times;</button>
         <div class="cart-modal-header">
-          <img src="/images/logo.png" alt="JOULANE Fashion" class="checkout-logo" />
+          <img src="https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/skilwjfxosy60qtgwkxw.jpg" alt="JOULANE Fashion" class="checkout-logo" />
           <h3><i class="fa-solid fa-cart-shopping"></i> <span data-i18n="cartHeading">سلة التسوق والجملة</span></h3>
           <p class="text-muted" data-i18n="cartSubheading">المنتجات المختارة لإرسال طلب الجملة الموحد</p>
         </div>
@@ -216,7 +229,7 @@
           </div>
           <div class="cart-actions-grid">
             <button id="proceed-checkout-btn" class="btn btn-gold btn-block btn-lg">
-              <i class="fa-solid fa-circle-check"></i> <span data-i18n="proceedCheckout">إكمال الطلب الموحد</span>
+              <i class="fa-solid fa-circle-check"></i> <span data-i18n="proceedCheckout">إكمال الطلب</span>
             </button>
             <button id="clear-cart-btn" class="btn btn-outline-gold btn-sm">
               <i class="fa-solid fa-trash"></i> <span data-i18n="clearCart">تفريغ السلة</span>
@@ -231,12 +244,11 @@
         <div class="modal-drag-handle"></div>
         <button class="modal-close" id="close-checkout-modal" aria-label="إغلاق">&times;</button>
         <div class="checkout-header">
-          <img src="/images/logo.png" alt="JOULANE Fashion" class="checkout-logo" />
+          <img src="https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/skilwjfxosy60qtgwkxw.jpg" alt="JOULANE Fashion" class="checkout-logo" />
           <h3 data-i18n="checkoutTitle">تأكيد طلب السلة الموحد</h3>
           <p data-i18n="checkoutText">املأ بياناتك وسنحضر رسالة واتساب مفصلة بجميع المنتجات المطلوبة.</p>
         </div>
         <form id="express-checkout-form" class="checkout-form">
-          <div class="selected-cart-preview" id="checkout-product-preview"></div>
           <div class="form-row grid-2">
             <div class="form-group">
               <label for="customer-name"><i class="fa-solid fa-user"></i> <span data-i18n="nameLabel">الاسم الكامل / اسم المحل</span></label>
@@ -287,7 +299,7 @@
               </label>
             </div>
           </div>
-          
+
           <div class="form-group" id="address-group">
             <label for="customer-address" id="address-label">
               <i class="fa-solid fa-location-dot"></i> <span id="address-label-text">العنوان الكامل للمنزل أو المحل</span>
@@ -295,11 +307,12 @@
             <input type="text" id="customer-address" class="form-control" placeholder="أدخل الشارع، اسم المحل، أو الحي السكني..." required />
             <small id="address-help-text" class="help-text text-gold">يرجى توضيح عنوانك بدقة حتى يصل الموزع مباشرة لباب منزلك أو محلك.</small>
           </div>
+          <div class="selected-cart-preview" id="checkout-product-preview"></div>
           <div class="price-summary-box">
             <div class="price-row"><span data-i18n="productsTotalLabel">المنتجات</span> <strong id="summary-product-price">0 دج</strong></div>
             <div class="price-row"><span data-i18n="deliveryLabel">التوصيل</span><strong id="summary-shipping-fee">0 دج</strong></div>
             <div class="price-row total-row"><span data-i18n="totalLabel">المجموع عند الاستلام</span><strong id="summary-total-price" class="total-amount">0 دج</strong></div>
-            <div class="summary-qty" id="summary-series-qty">1 كرطون / 6 أزواج</div>
+            <div class="summary-qty" id="summary-series-qty">1 كرطون / 18 زوجًا</div>
           </div>
           <button type="submit" id="submit-order-btn" class="btn btn-gold btn-block btn-lg">
             <i class="fa-solid fa-circle-check"></i> <span data-i18n="submitOrder">حفظ الطلب وفتح واتساب</span>
@@ -337,7 +350,7 @@
               <i class="fa-solid fa-user-shield"></i>
             </div>
             <h2>لوحة تحكم الإدارة</h2>
-            <p>أدخل كلمة مرور الإدارة للوصول إلى لوحة التحكم (الافتراضية: <strong>1234</strong>)</p>
+            <p>أدخل رمز الدخول الآمن للوصول إلى لوحة التحكم.</p>
             <form id="admin-login-form" onsubmit="return false;">
               <div class="form-group mb-3">
                 <label style="font-size: 0.85rem; color: #94a3b8; font-weight: 700; margin-bottom: 4px; display: block; text-align: right;">اسم المستخدم / الحساب:</label>
@@ -640,6 +653,66 @@
                         </label>
                       </div>
 
+                      <div class="form-group section-visibility-box">
+                        <label style="font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                          <span><i class="fa-solid fa-certificate"></i> شارة المنتج (مثل: جديد / الأكثر طلبًا)</span>
+                          <select name="showProductPromoBadge" class="form-control show-hide-select" style="width: 140px; padding: 6px 12px; font-weight: bold;">
+                            <option value="true">👁️ ظاهرة بالمتجر</option>
+                            <option value="false">🚫 مخفية نهائيًا</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div class="form-group section-visibility-box">
+                        <label style="font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                          <span><i class="fa-solid fa-box"></i> شارة الكرطون (1 كرطون = 18 زوجًا)</span>
+                          <select name="showCartonBadge" class="form-control show-hide-select" style="width: 140px; padding: 6px 12px; font-weight: bold;">
+                            <option value="true">👁️ ظاهرة بالمتجر</option>
+                            <option value="false">🚫 مخفية نهائيًا</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div class="form-group section-visibility-box">
+                        <label style="font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                          <span><i class="fa-solid fa-layer-group"></i> قسم المنتج داخل البطاقة</span>
+                          <select name="showProductCategory" class="form-control show-hide-select" style="width: 140px; padding: 6px 12px; font-weight: bold;">
+                            <option value="true">👁️ ظاهر بالمتجر</option>
+                            <option value="false">🚫 مخفي نهائيًا</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div class="form-group section-visibility-box">
+                        <label style="font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                          <span><i class="fa-solid fa-star"></i> خمس نجوم صغيرة داخل بطاقة المنتج</span>
+                          <select name="showProductStars" class="form-control show-hide-select" style="width: 140px; padding: 6px 12px; font-weight: bold;">
+                            <option value="true">👁️ ظاهرة بالمتجر</option>
+                            <option value="false">🚫 مخفية نهائيًا</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div class="form-group section-visibility-box">
+                        <label style="font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                          <span><i class="fa-solid fa-chart-simple"></i> عدد الطلبات الحقيقية (المكتملة فقط)</span>
+                          <select name="showProductRating" class="form-control show-hide-select" style="width: 140px; padding: 6px 12px; font-weight: bold;">
+                            <option value="true">👁️ ظاهر بالمتجر</option>
+                            <option value="false">🚫 مخفي نهائيًا</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div class="form-group section-visibility-box">
+                        <label style="font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                          <span><i class="fa-solid fa-align-right"></i> وصف المنتج داخل البطاقة</span>
+                          <select name="showProductDescription" class="form-control show-hide-select" style="width: 140px; padding: 6px 12px; font-weight: bold;">
+                            <option value="true">👁️ ظاهر بالمتجر</option>
+                            <option value="false">🚫 مخفي نهائيًا</option>
+                          </select>
+                        </label>
+                      </div>
+
                     </div>
                   </div>
                 </div>
@@ -683,7 +756,7 @@
                       <div class="form-group">
                         <label>صورة اللوجو (Logo Image)</label>
                         <div class="image-input-group">
-                          <input type="text" name="logoImg" id="cms-logoImg-input" class="form-control" placeholder="/images/logo.png أو رابط/صورة" />
+                          <input type="text" name="logoImg" id="cms-logoImg-input" class="form-control" placeholder="https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/skilwjfxosy60qtgwkxw.jpg أو رابط/صورة" />
                           <label class="btn btn-outline-gold file-upload-btn">
                             <i class="fa-solid fa-upload"></i> رفع
                             <input type="file" accept="image/*" class="cms-file-uploader" data-target="cms-logoImg-input" hidden />
@@ -711,7 +784,7 @@
                     <div class="form-group">
                       <label>صورة الغلاف الرأسية</label>
                       <div class="image-input-group">
-                        <input type="text" name="coverImg" id="cms-coverImg-input" class="form-control" placeholder="/images/joulane-cover.png" />
+                        <input type="text" name="coverImg" id="cms-coverImg-input" class="form-control" placeholder="https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/qvyvxxiae7cjygigkrtw.jpg" />
                         <label class="btn btn-outline-gold file-upload-btn">
                           <i class="fa-solid fa-upload"></i> اختيار صورة من الجهاز
                           <input type="file" accept="image/*" class="cms-file-uploader" data-target="cms-coverImg-input" hidden />
@@ -1115,7 +1188,7 @@
         </div>
         <form id="product-editor-form" class="product-editor-form">
           <input type="hidden" id="pe-id" />
-          
+
           <div class="form-row grid-2">
             <div class="form-group">
               <label>كود المنتج المرجعي (ID)</label>
@@ -1150,54 +1223,57 @@
             </div>
             <div class="form-group">
               <label>سعر الكرطون (دج)</label>
-              <input type="number" id="pe-series-price" class="form-control" placeholder="19200" required />
+              <input type="number" id="pe-series-price" class="form-control" placeholder="57600" required />
             </div>
             <div class="form-group">
               <label>السعر القديم المشطوب (دج)</label>
               <input type="number" id="pe-old-price" class="form-control" placeholder="24000" />
             </div>
             <div class="form-group">
-              <label>عدد الأزواج بالكرطون</label>
-              <input type="number" id="pe-pairs" class="form-control" value="6" required />
+              <label>عدد الأزواج داخل الكرتون (قابل للتغيير)</label>
+              <input type="number" id="pe-pairs" class="form-control" value="18" min="1" step="1" inputmode="numeric" required />
             </div>
           </div>
 
           <div class="form-row grid-1">
             <div class="form-group">
-              <label>شارة التخفيض / العرض (عربي & فرنسي)</label>
-              <div class="grid-2 gap-8">
-                <input type="text" id="pe-badge-ar" class="form-control" placeholder="الأكثر طلبا" />
-                <input type="text" id="pe-badge-fr" class="form-control" placeholder="Best Seller" />
-              </div>
+              <label>شارة المنتج الجاهزة</label>
+              <input type="hidden" id="pe-badge-ar" />
+              <input type="hidden" id="pe-badge-fr" />
+              <div id="pe-badge-options" class="pe-choice-grid pe-badge-options" role="radiogroup" aria-label="اختيار شارة المنتج"></div>
             </div>
           </div>
 
-          <!-- Image Upload & URL -->
-          <div class="form-group">
-            <label><i class="fa-solid fa-image"></i> صورة المنتج (تحميل من جهازك أو رابط)</label>
+          <div class="form-group pe-media-section">
+            <label><i class="fa-solid fa-images"></i> صور المنتج — من صورة واحدة إلى 8 صور</label>
             <div class="product-img-upload-box">
               <div class="image-input-group">
-                <input type="text" id="pe-image-url" class="form-control" placeholder="/images/303-3.PNG أو أدخل رابط الصورة..." />
+                <input type="text" id="pe-image-url" class="form-control" inputmode="url" placeholder="ألصق رابط الصورة هنا..." />
+                <button type="button" id="pe-add-image-url" class="btn btn-outline-gold"><i class="fa-solid fa-link"></i> إضافة الرابط</button>
                 <label class="btn btn-outline-gold file-upload-btn">
-                  <i class="fa-solid fa-folder-open"></i> اختر صورة من الكمبيوتر/الهاتف
-                  <input type="file" id="pe-image-file" accept="image/*" hidden />
+                  <i class="fa-solid fa-folder-open"></i> رفع صور
+                  <input type="file" id="pe-image-file" accept="image/*" multiple hidden />
                 </label>
               </div>
-              <div class="img-preview-box">
-                <span>معاينة الصورة:</span>
-                <img id="pe-image-preview" src="/images/303-3.PNG" alt="معاينة" />
-              </div>
+              <p class="pe-helper"><i class="fa-solid fa-hand-pointer"></i> اضغط مطولًا واسحب لترتيب الصور. الصورة رقم 1 هي صورة الغلاف.</p>
+              <div id="pe-images-gallery" class="pe-images-gallery"></div>
             </div>
           </div>
 
-          <div class="form-row grid-2">
+          <div class="form-row grid-1">
             <div class="form-group">
-              <label>الألوان المتاحة (عربي - مفصولة بفواصل)</label>
-              <input type="text" id="pe-colors-ar" class="form-control" placeholder="أسود ذهبي, فضي, روز" />
+              <label>ألوان المنتج — اختر لونًا أو أكثر</label>
+              <input type="hidden" id="pe-colors-ar" />
+              <input type="hidden" id="pe-colors-fr" />
+              <div id="pe-color-palette" class="pe-color-palette" aria-label="اختيار ألوان المنتج"></div>
             </div>
+          </div>
+
+          <div class="form-row grid-1">
             <div class="form-group">
-              <label>الألوان المتاحة (فرنسي - مفصولة بفواصل)</label>
-              <input type="text" id="pe-colors-fr" class="form-control" placeholder="Noir dore, Argent, Rose" />
+              <label>المقاسات الثابتة لجميع الأحذية — من 36 إلى 41</label>
+              <input type="hidden" id="pe-sizes" />
+              <div id="pe-size-picker" class="pe-size-picker" aria-label="اختيار مقاسات الأحذية"></div>
             </div>
           </div>
 
@@ -1215,11 +1291,11 @@
           <div class="form-row grid-2">
             <div class="form-group">
               <label>المميزات (عربي - مفصولة بفواصل)</label>
-              <input type="text" id="pe-features-ar" class="form-control" placeholder="بيع بالجملة فقط, كرطون من 36 إلى 41, توصيل سريع" />
+              <input type="text" id="pe-features-ar" class="form-control" placeholder="بيع بالجملة فقط, توصيل سريع" />
             </div>
             <div class="form-group">
               <label>المميزات (فرنسي - مفصولة بفواصل)</label>
-              <input type="text" id="pe-features-fr" class="form-control" placeholder="Vente en gros uniquement, Serie du 36 au 41" />
+              <input type="text" id="pe-features-fr" class="form-control" placeholder="Vente en gros uniquement, Livraison rapide" />
             </div>
           </div>
 
@@ -1292,8 +1368,22 @@
             <i class="fa-solid fa-clock-rotate-left"></i> سجل الحركات
             <span id="stock-logs-badge-count" class="badge-count">0</span>
           </button>
+
+          <div style="margin-right: auto; display: flex; gap: 8px; align-items: center;">
+            <button type="button" id="stock-reset-all-btn" class="btn btn-outline-danger btn-sm" style="padding: 6px 12px; font-size: 0.85rem; border-radius: 6px;">
+              <i class="fa-solid fa-triangle-exclamation"></i> تفريغ الستوك
+            </button>
+            <button type="button" id="stock-reset-insights-btn" class="btn btn-outline-warning btn-sm" style="padding: 6px 12px; font-size: 0.85rem; border-radius: 6px;">
+              <i class="fa-solid fa-rotate-left"></i> تصفير الإحصائيات
+            </button>
+          </div>
+
           <button type="button" id="stock-tab-btn-insights" class="stock-tab-btn">
             <i class="fa-solid fa-chart-column"></i> الإحصائيات
+          </button>
+          <button type="button" id="stock-tab-btn-pro" class="stock-tab-btn">
+            <i class="fa-solid fa-shield-halved"></i> Stock Pro
+            <span id="stock-pro-badge-count" class="badge-count">0</span>
           </button>
         </div>
 
@@ -1358,6 +1448,14 @@
                 <option value="low_stock">🟡 مخزون منخفض فقط</option>
                 <option value="out_of_stock">🔴 نفذ المخزون فقط</option>
               </select>
+            </div>
+            <div class="stock-pro-quick-actions">
+              <button type="button" id="stock-barcode-scan-btn" class="btn btn-outline-gold btn-sm">
+                <i class="fa-solid fa-barcode"></i> مسح باركود
+              </button>
+              <span id="stock-offline-indicator" class="stock-sync-pill is-online">
+                <i class="fa-solid fa-cloud-check"></i> متصل
+              </span>
             </div>
           </div>
 
@@ -1455,6 +1553,16 @@
             <div id="stock-top-models" class="stock-top-models"></div>
           </section>
         </div>
+
+        <!-- Tab 4: Professional stock operations -->
+        <div id="stock-tab-pro-sec" class="hidden">
+          <div id="stock-pro-root" class="stock-pro-root">
+            <div class="stock-insight-empty">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              <span>جارٍ تحميل أدوات Stock Pro...</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1467,7 +1575,7 @@
         </div>
         <div class="stock-entry-modal-body">
           <div class="stock-entry-product">
-            <img id="stock-entry-prod-img" src="/images/303-3.PNG" alt="صورة الموديل" />
+            <img id="stock-entry-prod-img" src="https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg" alt="صورة الموديل" />
             <div>
               <span id="stock-entry-prod-code" class="stock-model-tag">كود: 303-3</span>
               <h5 id="stock-entry-prod-title">موديل 303-3</h5>
@@ -1601,7 +1709,7 @@
           <p>هل انتهيت من إدخال جميع الكراتين، أم تريد إضافة موديل آخر إلى نفس الوصل؟</p>
         </div>
         <div class="stock-batch-last-item">
-          <img id="stock-batch-last-img" src="/images/303-3.PNG" alt="آخر موديل مسجل" />
+          <img id="stock-batch-last-img" src="https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg" alt="آخر موديل مسجل" />
           <div>
             <strong id="stock-batch-last-name">موديل 303-3</strong>
             <span id="stock-batch-last-change">+1 كرطون</span>

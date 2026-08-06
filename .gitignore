@@ -8,3 +8,13 @@ dist
 .aider*
 .vercel
 .env*
+/apks/
+/tmp/
+/temp_icon_check/
+/المنتجات/
+/run_assistant.bat
+/.github/skills/android-app-help/
+/ANDROID_APPS_PLAN.md
+/LOCAL_PROJECT_CONTEXT.md
+/AGENTS.md
+/.env.vault.local

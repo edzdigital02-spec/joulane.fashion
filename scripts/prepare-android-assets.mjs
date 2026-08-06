@@ -9,6 +9,7 @@ const surfaces = {
   admin: ['index.html', 'stock.html'],
   stock: ['index.html', 'admin.html']
 };
+const remoteUpdateAssets = ['android', 'android-updates.json'];
 
 if (!existsSync(dist)) throw new Error('Build output not found. Run npm run build first.');
 
@@ -18,6 +19,7 @@ for (const [flavor, excludedPages] of Object.entries(surfaces)) {
   mkdirSync(target, { recursive: true });
   cpSync(dist, target, { recursive: true });
   excludedPages.forEach(page => rmSync(resolve(target, page), { force: true }));
+  remoteUpdateAssets.forEach(asset => rmSync(resolve(target, asset), { recursive: true, force: true }));
 }
 
 // Flavor assets replace the generic copy, keeping each APK on its intended surface.

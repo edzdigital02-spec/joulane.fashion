@@ -1,7 +1,25 @@
 import { Store } from './store.js';
 import { WILAYAS } from './data/wilayas.js';
+import { PRODUCT_COLOR_OPTIONS, inferProductColorKeys } from './data/productColors.js';
 
 let isAdminLoggedIn = false;
+let selectedProductImages = [];
+let selectedProductColorKeys = [];
+const SHOE_SIZES = Object.freeze([36, 37, 38, 39, 40, 41]);
+let selectedProductSizes = [...SHOE_SIZES];
+let selectedProductBadge = null;
+
+const PRODUCT_BADGE_OPTIONS = [
+  { ar: 'جديد', fr: 'Nouveau' },
+  { ar: 'الأكثر طلبًا', fr: 'Meilleure vente' },
+  { ar: 'وصل حديثًا', fr: 'Nouvel arrivage' },
+  { ar: 'اختيار مميز', fr: 'Coup de cœur' },
+  { ar: 'عرض خاص', fr: 'Offre spéciale' },
+  { ar: 'كمية محدودة', fr: 'Stock limité' },
+  { ar: 'حصري', fr: 'Exclusivité' },
+  { ar: 'تخفيض', fr: 'Promotion' },
+  { ar: 'بدون شارة', fr: 'Sans badge' }
+];
 
 const ADMIN_TAB_PERMISSIONS = {
   overview: 'adminOverview',
@@ -37,6 +55,138 @@ function requireAdminPermission(permission, message) {
   return false;
 }
 
+const ORDER_STATUS_META = {
+  New: { label: 'جديد', icon: 'fa-sparkles' },
+  Confirmed: { label: 'مؤكد', icon: 'fa-circle-check' },
+  Shipped: { label: 'تم الشحن', icon: 'fa-truck-fast' },
+  Delivered: { label: 'مكتمل', icon: 'fa-box-circle-check' },
+  Cancelled: { label: 'ملغى', icon: 'fa-ban' }
+};
+
+function escapeAdminHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  }[character]));
+}
+
+function adminNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatAdminDzd(value) {
+  return `${Math.max(0, adminNumber(value)).toLocaleString('ar-DZ')} دج`;
+}
+
+function normalizeOrderStatus(status) {
+  const aliases = {
+    new: 'New', 'جديد': 'New', 'جديدة': 'New',
+    confirmed: 'Confirmed', 'مؤكد': 'Confirmed', 'مؤكدة': 'Confirmed',
+    shipped: 'Shipped', 'تم الشحن': 'Shipped',
+    delivered: 'Delivered', 'مكتمل': 'Delivered', 'مكتملة': 'Delivered',
+    cancelled: 'Cancelled', canceled: 'Cancelled', 'ملغى': 'Cancelled', 'ملغاة': 'Cancelled'
+  };
+  return aliases[String(status || 'New').trim().toLowerCase()] || 'New';
+}
+
+function orderStatusMeta(status) {
+  const normalized = normalizeOrderStatus(status);
+  return { key: normalized, ...ORDER_STATUS_META[normalized] };
+}
+
+function orderItemsSnapshot(order) {
+  if (Array.isArray(order?.items) && order.items.length) {
+    return order.items.map((item, index) => ({
+      ...item,
+      productId: item.productId || `legacy-${index}`,
+      nameAr: item.nameAr || item.nameFr || item.name || 'منتج',
+      nameFr: item.nameFr || item.nameAr || item.name || 'Produit',
+      color: item.color || (Array.isArray(item.colors) ? item.colors.join(' + ') : 'افتراضي'),
+      seriesQty: Math.max(1, parseInt(item.seriesQty, 10) || 1),
+      pairsCount: Math.max(0, parseInt(item.pairsCount, 10) || 0),
+      price: Math.max(0, adminNumber(item.price))
+    }));
+  }
+
+  return [{
+    productId: 'legacy-product',
+    nameAr: order?.productName || 'منتج',
+    nameFr: order?.productName || 'Produit',
+    color: order?.color || 'افتراضي',
+    seriesQty: Math.max(1, parseInt(order?.seriesQty, 10) || 1),
+    pairsCount: 0,
+    price: Math.max(0, adminNumber(order?.productPrice || order?.totalAmount) - adminNumber(order?.shippingFee))
+  }];
+}
+
+function orderCartonCount(order) {
+  return orderItemsSnapshot(order).reduce((sum, item) => sum + item.seriesQty, 0);
+}
+
+function orderDateValue(order) {
+  const direct = Date.parse(order?.createdAt || order?.updatedAt || '');
+  if (Number.isFinite(direct)) return direct;
+  const normalized = String(order?.timestamp || '')
+    .replace(/[٠-٩]/g, digit => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit))
+    .replace(/[۰-۹]/g, digit => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
+    .replace(/[\u200e\u200f]/g, '')
+    .trim();
+  const legacy = Date.parse(normalized);
+  return Number.isFinite(legacy) ? legacy : 0;
+}
+
+function calculateOrderMetrics(orders) {
+  const normalized = orders.map(order => ({ ...order, status: normalizeOrderStatus(order.status) }));
+  const delivered = normalized.filter(order => order.status === 'Delivered');
+  const cancelled = normalized.filter(order => order.status === 'Cancelled');
+  const active = normalized.filter(order => !['Delivered', 'Cancelled'].includes(order.status));
+  const newOrders = normalized.filter(order => order.status === 'New');
+  const inProgress = normalized.filter(order => ['Confirmed', 'Shipped'].includes(order.status));
+  const completedRevenue = delivered.reduce((sum, order) => sum + adminNumber(order.totalAmount), 0);
+  const activeValue = active.reduce((sum, order) => sum + adminNumber(order.totalAmount), 0);
+  const averageOrder = delivered.length ? completedRevenue / delivered.length : (normalized.length
+    ? normalized.reduce((sum, order) => sum + adminNumber(order.totalAmount), 0) / normalized.length
+    : 0);
+  const resolvedCount = delivered.length + cancelled.length;
+  const completionRate = resolvedCount ? Math.round((delivered.length / resolvedCount) * 100) : 0;
+
+  const wilayaTotals = new Map();
+  const productTotals = new Map();
+  (delivered.length ? delivered : normalized.filter(order => order.status !== 'Cancelled')).forEach(order => {
+    const wilaya = String(order.wilaya || 'غير محدد').trim();
+    wilayaTotals.set(wilaya, (wilayaTotals.get(wilaya) || 0) + 1);
+    orderItemsSnapshot(order).forEach(item => {
+      const key = String(item.nameAr || item.nameFr || 'منتج').trim();
+      productTotals.set(key, (productTotals.get(key) || 0) + item.seriesQty);
+    });
+  });
+
+  const topEntry = map => Array.from(map.entries()).sort((a, b) => b[1] - a[1])[0] || ['لا توجد بيانات', 0];
+  const [topWilaya, topWilayaCount] = topEntry(wilayaTotals);
+  const [topProduct, topProductCartons] = topEntry(productTotals);
+
+  return {
+    total: normalized.length,
+    delivered: delivered.length,
+    cancelled: cancelled.length,
+    active: active.length,
+    newCount: newOrders.length,
+    inProgress: inProgress.length,
+    completedRevenue,
+    activeValue,
+    averageOrder,
+    completionRate,
+    topWilaya,
+    topWilayaCount,
+    topProduct,
+    topProductCartons
+  };
+}
+
+function notifyAdmin(message) {
+  window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: message }));
+}
+
 function enhanceAdminTables(root) {
   if (!root) return;
 
@@ -61,13 +211,23 @@ function enhanceAdminTables(root) {
 }
 
 export async function uploadToCloudinary(file) {
-  const CLOUD_NAME = 'envkmzcu';
   try {
+    const signatureResponse = await fetch('/api/cloudinary-signature', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    if (!signatureResponse.ok) throw new Error('Cloudinary signature is unavailable');
+
+    const { cloudName, apiKey, timestamp, folder, signature } = await signatureResponse.json();
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('upload_preset', 'ml_default');
+    formData.append('api_key', apiKey);
+    formData.append('timestamp', String(timestamp));
+    formData.append('folder', folder);
+    formData.append('signature', signature);
     
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
       method: 'POST',
       body: formData
     });
@@ -128,6 +288,21 @@ export function initAdmin(refreshMainStoreFn) {
       adminModal.classList.remove('active');
     });
   }
+
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    const orderEditor = document.getElementById('order-editor-modal');
+    if (orderEditor?.classList.contains('active')) {
+      event.preventDefault();
+      closeOrderEditor();
+      return;
+    }
+    const nestedModalOpen = adminModal?.querySelector('.modal-overlay.active');
+    if (adminModal?.classList.contains('active') && !nestedModalOpen) {
+      adminModal.classList.remove('active');
+      adminPanelBtn?.focus();
+    }
+  });
 
   if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
@@ -248,6 +423,15 @@ export function initAdmin(refreshMainStoreFn) {
   }
 
   window.addEventListener('joulane:usersUpdated', () => populateAdminUsersSelect());
+  window.addEventListener('joulane:ordersUpdated', () => {
+    if (!isAdminLoggedIn || !hasAdminPermission('adminOrders')) return;
+    renderOverviewTab();
+    if (document.getElementById('tab-orders')?.classList.contains('active')) renderOrdersTab();
+  });
+  window.addEventListener('joulane:orderSyncResult', event => {
+    if (!isAdminLoggedIn || !hasAdminPermission('adminOrders')) return;
+    notifyOrderMutationResult(event.detail);
+  });
 
   // Tabs Navigation
   const tabBtns = document.querySelectorAll('.admin-tab-btn');
@@ -282,11 +466,7 @@ export function initAdmin(refreshMainStoreFn) {
   });
 
   // Quick Action Buttons
-  document.getElementById('quick-add-product-btn')?.addEventListener('click', () => {
-    if (!requireAdminPermission('adminProducts')) return;
-    if (!requireAdminPermission('adminPrices', 'إضافة منتج جديد تتطلب صلاحية إدارة الأسعار أيضًا.')) return;
-    openProductEditor();
-  });
+  bindProductCreateButton('quick-add-product-btn');
   document.getElementById('quick-edit-cms-btn')?.addEventListener('click', () => {
     if (requireAdminPermission('adminContent')) switchTab('cms');
   });
@@ -302,6 +482,8 @@ export function initAdmin(refreshMainStoreFn) {
 
   // Setup Product Editor Modal logic
   setupProductEditor(refreshMainStoreFn);
+  bindProductCreateButton('add-product-btn');
+  bindProductFilterControls();
 
   // Setup Categories Tab
   setupCategoriesTab(refreshMainStoreFn);
@@ -332,10 +514,10 @@ function renderOverviewTab() {
   const canManageOrders = hasAdminPermission('adminOrders');
   const orders = canManageOrders ? Store.getOrders() : [];
   const products = Store.getProducts();
-  
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-  const homeCount = orders.filter(o => o.deliveryType === 'home').length;
-  const deskCount = orders.filter(o => o.deliveryType === 'desk').length;
+  const metrics = calculateOrderMetrics(orders);
+  const completedOrders = orders.filter(order => normalizeOrderStatus(order.status) === 'Delivered');
+  const homeCount = completedOrders.filter(order => order.deliveryType === 'home').length;
+  const deskCount = completedOrders.filter(order => order.deliveryType === 'desk').length;
 
   const revenueStat = document.getElementById('stat-total-revenue');
   const ordersStat = document.getElementById('stat-total-orders');
@@ -343,10 +525,50 @@ function renderOverviewTab() {
   if (revenueStat) revenueStat.closest('.stat-card').hidden = !canManageOrders;
   if (ordersStat) ordersStat.closest('.stat-card').hidden = !canManageOrders;
   if (homeStat) homeStat.closest('.stat-card').hidden = !canManageOrders;
-  if (revenueStat) revenueStat.textContent = `${totalRevenue.toLocaleString('ar-DZ')} دج`;
+  if (revenueStat) revenueStat.textContent = formatAdminDzd(metrics.completedRevenue);
   if (ordersStat) ordersStat.textContent = orders.length;
   document.getElementById('stat-total-products').textContent = products.length;
   if (homeStat) homeStat.textContent = `${homeCount} منزل / ${deskCount} مكتب`;
+
+  const statsStrip = document.querySelector('#tab-overview .admin-stats-strip');
+  let insights = document.getElementById('admin-overview-insights');
+  if (canManageOrders && statsStrip && !insights) {
+    insights = document.createElement('section');
+    insights.id = 'admin-overview-insights';
+    insights.className = 'admin-insights-grid';
+    insights.innerHTML = `
+      <button type="button" class="admin-insight-card" id="overview-open-orders">
+        <h4><i class="fa-solid fa-hourglass-half"></i> الطلبات النشطة</h4>
+        <strong class="admin-insight-value" id="insight-active-orders">0</strong>
+        <p>طلبات جديدة أو قيد المعالجة والشحن — اضغط لعرضها.</p>
+      </button>
+      <div class="admin-insight-card">
+        <h4><i class="fa-solid fa-chart-line"></i> نسبة الإتمام</h4>
+        <strong class="admin-insight-value" id="insight-completion-rate">0%</strong>
+        <p>نسبة الطلبات المكتملة من إجمالي الطلبات المحسومة.</p>
+      </div>
+      <div class="admin-insight-card">
+        <h4><i class="fa-solid fa-location-dot"></i> أكثر ولاية طلبًا</h4>
+        <strong class="admin-insight-value" id="insight-top-wilaya">—</strong>
+        <p>حسب الطلبات المكتملة المتوفرة في النظام.</p>
+      </div>
+      <div class="admin-insight-card">
+        <h4><i class="fa-solid fa-ranking-star"></i> الموديل الأكثر مبيعًا</h4>
+        <strong class="admin-insight-value" id="insight-top-product">—</strong>
+        <p>مقاسًا بعدد الكراطين المسجلة في الطلبات.</p>
+      </div>`;
+    statsStrip.insertAdjacentElement('afterend', insights);
+    document.getElementById('overview-open-orders')?.addEventListener('click', () => switchTab('orders'));
+  }
+  if (insights) insights.hidden = !canManageOrders;
+  const activeInsight = document.getElementById('insight-active-orders');
+  const completionInsight = document.getElementById('insight-completion-rate');
+  const wilayaInsight = document.getElementById('insight-top-wilaya');
+  const productInsight = document.getElementById('insight-top-product');
+  if (activeInsight) activeInsight.textContent = metrics.active;
+  if (completionInsight) completionInsight.textContent = `${metrics.completionRate}%`;
+  if (wilayaInsight) wilayaInsight.textContent = metrics.topWilayaCount ? `${metrics.topWilaya} (${metrics.topWilayaCount})` : 'لا توجد بيانات';
+  if (productInsight) productInsight.textContent = metrics.topProductCartons ? `${metrics.topProduct} (${metrics.topProductCartons})` : 'لا توجد بيانات';
 
   const recentOrdersSection = document.querySelector('.recent-orders-sec');
   if (recentOrdersSection) recentOrdersSection.hidden = !canManageOrders;
@@ -366,17 +588,22 @@ function renderOverviewTab() {
     return;
   }
 
-  tbody.innerHTML = orders.slice(0, 5).map(o => `
+  const recentOrders = [...orders].sort((a, b) => orderDateValue(b) - orderDateValue(a)).slice(0, 5);
+  tbody.innerHTML = recentOrders.map(order => {
+    const status = orderStatusMeta(order.status);
+    const safePhone = String(order.phone || '').replace(/[^\d+]/g, '');
+    return `
     <tr>
-      <td><strong>#${o.id}</strong></td>
-      <td><small>${o.timestamp || ''}</small></td>
-      <td>${o.customerName}</td>
-      <td><a href="tel:${o.phone}" dir="ltr">${o.phone}</a></td>
-      <td>${o.wilaya} - ${o.commune}</td>
-      <td><strong>${(o.totalAmount || 0).toLocaleString()} دج</strong></td>
-      <td><span class="stock-badge in_stock">${o.status || 'جديد'}</span></td>
+      <td><strong>#${escapeAdminHtml(order.id)}</strong></td>
+      <td><small>${escapeAdminHtml(order.timestamp || '')}</small></td>
+      <td>${escapeAdminHtml(order.customerName)}</td>
+      <td><a href="tel:${safePhone}" dir="ltr">${escapeAdminHtml(order.phone)}</a></td>
+      <td>${escapeAdminHtml(order.wilaya)} - ${escapeAdminHtml(order.commune)}</td>
+      <td><strong>${formatAdminDzd(order.totalAmount)}</strong></td>
+      <td><span class="order-status-pill ${status.key.toLowerCase()}">${status.label}</span></td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
 
 /* ==========================================================================
@@ -409,11 +636,14 @@ function renderProductsTab() {
 
   container.innerHTML = products.map(p => {
     const nameAr = p.name?.ar || p.name || 'منتج بدون اسم';
+    const productImages = Array.isArray(p.images) && p.images.length ? p.images : [p.image || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg'];
 
     return `
-      <div class="admin-product-card">
+      <div class="admin-product-card" data-product-id="${p.id}">
+        <span class="admin-product-drag-hint"><i class="fa-solid fa-grip-vertical"></i><small>اضغط مطولًا للترتيب</small></span>
         <div class="admin-prod-top">
-          <img src="${p.image}" alt="${nameAr}" class="admin-prod-img" loading="lazy" decoding="async" onerror="this.src='/images/303-3.PNG';" />
+          <img src="${productImages[0]}" alt="${nameAr}" class="admin-prod-img" loading="lazy" decoding="async" onerror="this.src='https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg';" />
+          ${productImages.length > 1 ? `<span class="admin-product-image-count"><i class="fa-solid fa-images"></i> ${productImages.length}</span>` : ''}
           <div class="admin-prod-info">
             <h5>${nameAr}</h5>
             <div class="admin-prod-price">${(p.price || 0).toLocaleString()} دج <small style="font-size:0.8rem; font-weight:normal;">/ للزوج</small></div>
@@ -427,6 +657,8 @@ function renderProductsTab() {
       </div>
     `;
   }).join('');
+  container.dataset.reorderEnabled = catVal === 'all' && !searchVal ? 'true' : 'false';
+  setupProductCardLongPressOrdering(container);
 
   // Event Listeners for action buttons
   container.querySelectorAll('.edit-prod-btn').forEach(btn => {
@@ -457,14 +689,115 @@ function renderProductsTab() {
   });
 }
 
-// Add/Edit Product Listeners
-document.getElementById('admin-product-search')?.addEventListener('input', renderProductsTab);
-document.getElementById('admin-product-cat-filter')?.addEventListener('change', renderProductsTab);
-document.getElementById('add-product-btn')?.addEventListener('click', () => {
-  if (!requireAdminPermission('adminProducts')) return;
-  if (!requireAdminPermission('adminPrices', 'إضافة منتج جديد تتطلب صلاحية إدارة الأسعار أيضًا.')) return;
-  openProductEditor();
-});
+function setupProductCardLongPressOrdering(container) {
+  if (!container || container.dataset.productOrderBound) return;
+  container.dataset.productOrderBound = 'true';
+  let timer = null;
+  let draggedCard = null;
+  let startX = 0;
+  let startY = 0;
+  let pendingCard = null;
+  let activePointerId = null;
+  let suppressClickUntil = 0;
+
+  const cancelPending = () => {
+    clearTimeout(timer);
+    timer = null;
+    pendingCard = null;
+  };
+
+  container.addEventListener('pointerdown', event => {
+    if (container.dataset.reorderEnabled !== 'true' || event.target.closest('button, input, select, a')) return;
+    const card = event.target.closest('.admin-product-card');
+    if (!card) return;
+    startX = event.clientX;
+    startY = event.clientY;
+    pendingCard = card;
+    activePointerId = event.pointerId;
+    timer = window.setTimeout(() => {
+      if (pendingCard !== card) return;
+      draggedCard = card;
+      pendingCard = null;
+      card.classList.add('is-reordering');
+      container.classList.add('is-reordering-products');
+      card.setPointerCapture?.(activePointerId);
+      navigator.vibrate?.(40);
+    }, 560);
+  });
+
+  container.addEventListener('pointermove', event => {
+    if (!draggedCard) {
+      if (Math.hypot(event.clientX - startX, event.clientY - startY) > 8) cancelPending();
+      return;
+    }
+    event.preventDefault();
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.admin-product-card');
+    if (!target || target === draggedCard || target.parentElement !== container) return;
+    const cards = Array.from(container.querySelectorAll('.admin-product-card'));
+    const fromIndex = cards.indexOf(draggedCard);
+    const toIndex = cards.indexOf(target);
+    if (fromIndex < toIndex) target.after(draggedCard);
+    else target.before(draggedCard);
+  });
+
+  const finish = () => {
+    cancelPending();
+    if (draggedCard) {
+      try {
+        if (activePointerId !== null && draggedCard.hasPointerCapture?.(activePointerId)) {
+          draggedCard.releasePointerCapture(activePointerId);
+        }
+      } catch (error) {
+        console.debug('Pointer capture was already released.', error);
+      }
+      draggedCard.classList.remove('is-reordering');
+      container.classList.remove('is-reordering-products');
+      const orderedIds = Array.from(container.querySelectorAll('.admin-product-card')).map(card => card.dataset.productId);
+      const currentProducts = Store.getProducts();
+      const productMap = new Map(currentProducts.map(product => [product.id, product]));
+      const reordered = orderedIds.map(id => productMap.get(id)).filter(Boolean);
+      const untouched = currentProducts.filter(product => !orderedIds.includes(product.id));
+      Store.saveProducts([...reordered, ...untouched]);
+      suppressClickUntil = Date.now() + 450;
+      window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: 'تم حفظ ترتيب ظهور المنتجات.' }));
+    }
+    draggedCard = null;
+    activePointerId = null;
+  };
+  container.addEventListener('pointerup', finish);
+  container.addEventListener('pointercancel', finish);
+  container.addEventListener('click', event => {
+    if (Date.now() < suppressClickUntil) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+  container.closest('.admin-tabs-content')?.addEventListener('scroll', cancelPending, { passive: true });
+}
+
+function bindProductCreateButton(buttonId) {
+  const button = document.getElementById(buttonId);
+  if (!button || button.dataset.productCreateBound === 'true') return;
+  button.dataset.productCreateBound = 'true';
+  button.addEventListener('click', () => {
+    if (!requireAdminPermission('adminProducts')) return;
+    if (!requireAdminPermission('adminPrices', 'إضافة منتج جديد تتطلب صلاحية إدارة الأسعار أيضًا.')) return;
+    openProductEditor();
+  });
+}
+
+function bindProductFilterControls() {
+  const search = document.getElementById('admin-product-search');
+  const category = document.getElementById('admin-product-cat-filter');
+  if (search && search.dataset.productFilterBound !== 'true') {
+    search.dataset.productFilterBound = 'true';
+    search.addEventListener('input', renderProductsTab);
+  }
+  if (category && category.dataset.productFilterBound !== 'true') {
+    category.dataset.productFilterBound = 'true';
+    category.addEventListener('change', renderProductsTab);
+  }
+}
 
 /* ==========================================================================
    TAB: CATEGORIES MANAGER
@@ -496,11 +829,58 @@ function setupCategoriesTab(refreshMainStoreFn) {
   if (tbody && !tbody.dataset.bound) {
     tbody.dataset.bound = 'true';
     tbody.addEventListener('click', (e) => {
-      const btn = e.target.closest('.delete-cat-btn');
+      const btn = e.target.closest('.edit-cat-btn, .save-cat-btn, .cancel-cat-btn, .delete-cat-btn');
       if (!btn) return;
       if (!requireAdminPermission('adminProducts')) return;
       const id = btn.dataset.id;
-      if (confirm(`هل أنت تأكد من رغبتك في حذف القسم "${id}" نهائياً من المتجر؟`)) {
+
+      if (btn.classList.contains('edit-cat-btn')) {
+        const category = Store.getCategories().find(item => item.id === id);
+        const row = btn.closest('tr');
+        if (!category || !row) return;
+        row.innerHTML = `
+          <td><strong>${escapeAdminHtml(category.id)}</strong><small class="text-muted" style="display:block;">الكود ثابت لحماية ارتباط المنتجات</small></td>
+          <td><input class="form-control edit-cat-name-ar" value="${escapeAdminHtml(category.nameAr)}" aria-label="اسم القسم بالعربية" /></td>
+          <td><input class="form-control edit-cat-name-fr" value="${escapeAdminHtml(category.nameFr)}" aria-label="اسم القسم بالفرنسية" /></td>
+          <td>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn btn-gold btn-sm save-cat-btn" data-id="${escapeAdminHtml(category.id)}">
+                <i class="fa-solid fa-floppy-disk"></i> حفظ
+              </button>
+              <button class="btn btn-outline-gold btn-sm cancel-cat-btn" data-id="${escapeAdminHtml(category.id)}">
+                إلغاء
+              </button>
+            </div>
+          </td>
+        `;
+        row.querySelector('.edit-cat-name-ar')?.focus();
+        return;
+      }
+
+      if (btn.classList.contains('cancel-cat-btn')) {
+        renderCategoriesTab();
+        return;
+      }
+
+      if (btn.classList.contains('save-cat-btn')) {
+        const row = btn.closest('tr');
+        const nameAr = row?.querySelector('.edit-cat-name-ar')?.value.trim() || '';
+        const nameFr = row?.querySelector('.edit-cat-name-fr')?.value.trim() || '';
+        if (!nameAr || !nameFr) {
+          window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: 'أدخل اسم القسم بالعربية والفرنسية قبل الحفظ.' }));
+          return;
+        }
+        const updated = Store.updateCategory(id, { nameAr, nameFr });
+        if (!updated) return;
+        renderCategoriesTab();
+        populateCategoryDropdowns();
+        if (refreshMainStoreFn) refreshMainStoreFn();
+        window.dispatchEvent(new CustomEvent('joulane:refreshStore'));
+        window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: `تم تعديل القسم «${nameAr}» بنجاح.` }));
+        return;
+      }
+
+      if (btn.classList.contains('delete-cat-btn') && confirm(`هل أنت متأكد من رغبتك في حذف القسم "${id}" نهائياً من المتجر؟`)) {
         Store.deleteCategory(id);
         renderCategoriesTab();
         populateCategoryDropdowns();
@@ -525,34 +905,21 @@ function renderCategoriesTab() {
 
   tbody.innerHTML = categories.map(c => `
     <tr>
-      <td><strong>${c.id}</strong></td>
-      <td>${c.nameAr}</td>
-      <td>${c.nameFr}</td>
+      <td><strong>${escapeAdminHtml(c.id)}</strong></td>
+      <td>${escapeAdminHtml(c.nameAr)}</td>
+      <td>${escapeAdminHtml(c.nameFr)}</td>
       <td>
-        <button class="btn btn-danger-outline btn-sm delete-cat-btn" data-id="${c.id}" title="حذف القسم">
-          <i class="fa-solid fa-trash"></i> حذف
-        </button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-outline-gold btn-sm edit-cat-btn" data-id="${escapeAdminHtml(c.id)}" title="تعديل القسم">
+            <i class="fa-solid fa-pen-to-square"></i> تعديل
+          </button>
+          <button class="btn btn-danger-outline btn-sm delete-cat-btn" data-id="${escapeAdminHtml(c.id)}" title="حذف القسم">
+            <i class="fa-solid fa-trash"></i> حذف
+          </button>
+        </div>
       </td>
     </tr>
   `).join('');
-
-  tbody.querySelectorAll('.delete-cat-btn').forEach(btn => {
-    if (!btn.dataset.bound) {
-      btn.dataset.bound = 'true';
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!requireAdminPermission('adminProducts')) return;
-        const id = e.currentTarget.dataset.id;
-        if (confirm(`هل أنت تأكد من رغبتك في حذف القسم "${id}" نهائياً من المتجر؟`)) {
-          Store.deleteCategory(id);
-          renderCategoriesTab();
-          populateCategoryDropdowns();
-          window.dispatchEvent(new CustomEvent('joulane:refreshStore'));
-          window.dispatchEvent(new CustomEvent('joulane:showToast', { detail: `تم حذف القسم (${id}) بنجاح!` }));
-        }
-      });
-    }
-  });
 }
 
 function populateCategoryDropdowns() {
@@ -586,43 +953,90 @@ function setupProductEditor(refreshMainStoreFn) {
   const form = document.getElementById('product-editor-form');
   const fileInput = document.getElementById('pe-image-file');
   const urlInput = document.getElementById('pe-image-url');
-  const imgPreview = document.getElementById('pe-image-preview');
+  const addUrlBtn = document.getElementById('pe-add-image-url');
+  const gallery = document.getElementById('pe-images-gallery');
 
   if (closeBtn) closeBtn.onclick = () => modal.classList.remove('active');
   if (cancelBtn) cancelBtn.onclick = () => modal.classList.remove('active');
 
-  if (urlInput) {
-    urlInput.addEventListener('input', () => {
-      imgPreview.src = urlInput.value.trim() || '/images/303-3.PNG';
-    });
-  }
+  addUrlBtn?.addEventListener('click', () => {
+    const url = urlInput?.value.trim();
+    if (!url) return;
+    if (selectedProductImages.length >= 8) {
+      alert('يمكن إضافة 8 صور كحد أقصى لكل منتج.');
+      return;
+    }
+    selectedProductImages.push(url);
+    urlInput.value = '';
+    renderProductImageGallery();
+  });
 
   if (fileInput) {
     fileInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const uploadLabel = fileInput.closest('label');
-        const originalLabelHtml = uploadLabel ? uploadLabel.innerHTML : '';
-        if (uploadLabel) {
-          uploadLabel.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> جاري رفع الصورة لسيرفر Cloudinary...`;
-        }
-
-        const uploadedUrl = await uploadToCloudinary(file);
-
-        urlInput.value = uploadedUrl;
-        imgPreview.src = uploadedUrl;
-
-        if (uploadLabel) {
-          uploadLabel.innerHTML = `<i class="fa-solid fa-circle-check"></i> تم تخزين الصورة في Cloudinary بنجاح ☁️`;
-          setTimeout(() => {
-            uploadLabel.innerHTML = originalLabelHtml;
-          }, 3500);
-        }
+      const remaining = Math.max(0, 8 - selectedProductImages.length);
+      const chosenFiles = Array.from(e.target.files || []);
+      const files = chosenFiles.slice(0, remaining);
+      if (chosenFiles.length > remaining) {
+        alert(`يمكن إضافة 8 صور كحد أقصى. سيتم رفع ${remaining} صورة فقط.`);
       }
+      if (!files.length) return;
+      const uploadLabel = fileInput.closest('label');
+      uploadLabel?.classList.add('is-uploading');
+      const uploadedUrls = await Promise.all(files.map(file => uploadToCloudinary(file)));
+      selectedProductImages.push(...uploadedUrls.filter(Boolean));
+      uploadLabel?.classList.remove('is-uploading');
+      e.target.value = '';
+      renderProductImageGallery();
     });
   }
 
-  if (form) {
+  gallery?.addEventListener('click', (event) => {
+    const removeButton = event.target.closest('[data-image-remove]');
+    if (removeButton) {
+      selectedProductImages.splice(Number(removeButton.dataset.imageRemove), 1);
+      renderProductImageGallery();
+      return;
+    }
+    const coverButton = event.target.closest('[data-image-cover]');
+    if (coverButton) {
+      const index = Number(coverButton.dataset.imageCover);
+      const [image] = selectedProductImages.splice(index, 1);
+      selectedProductImages.unshift(image);
+      renderProductImageGallery();
+    }
+  });
+  setupImageLongPressOrdering(gallery);
+
+  document.getElementById('pe-color-palette')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-color-key]');
+    if (!button) return;
+    const key = button.dataset.colorKey;
+    selectedProductColorKeys = selectedProductColorKeys.includes(key)
+      ? selectedProductColorKeys.filter(item => item !== key)
+      : [...selectedProductColorKeys, key];
+    renderProductColorPalette();
+  });
+
+  document.getElementById('pe-badge-options')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-badge-ar]');
+    if (!button) return;
+    selectedProductBadge = {
+      ar: button.dataset.badgeAr,
+      fr: button.dataset.badgeFr
+    };
+    syncProductBadgeInputs();
+    renderProductBadgeOptions();
+  });
+
+  window.addEventListener('joulane:languageChanged', () => {
+    if (modal?.classList.contains('active')) {
+      renderProductBadgeOptions();
+      renderProductColorPalette();
+    }
+  });
+
+  if (form && !form.dataset.productEditorBound) {
+    form.dataset.productEditorBound = 'true';
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       if (!requireAdminPermission('adminProducts')) return;
@@ -643,30 +1057,34 @@ function setupProductEditor(refreshMainStoreFn) {
         price: canEditPrices ? (parseFloat(document.getElementById('pe-price').value) || 0) : (existingProduct?.price || 0),
         seriesPrice: canEditPrices ? (parseFloat(document.getElementById('pe-series-price').value) || 0) : (existingProduct?.seriesPrice || 0),
         oldPrice: canEditPrices ? (parseFloat(document.getElementById('pe-old-price').value) || 0) : (existingProduct?.oldPrice || 0),
-        pairsPerSeries: parseInt(document.getElementById('pe-pairs').value, 10) || 6,
+        pairsPerSeries: Math.max(1, parseInt(document.getElementById('pe-pairs').value, 10) || 18),
+        pairsPerSeriesConfigured: true,
         discountBadge: {
           ar: document.getElementById('pe-badge-ar').value.trim(),
           fr: document.getElementById('pe-badge-fr').value.trim()
         },
-        image: urlInput.value.trim() || '/images/303-3.PNG',
+        image: selectedProductImages[0] || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg',
+        images: selectedProductImages.length ? selectedProductImages.slice(0, 8) : ['https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg'],
         colors: {
-          ar: document.getElementById('pe-colors-ar').value.split(',').map(s => s.trim()).filter(Boolean),
-          fr: document.getElementById('pe-colors-fr').value.split(',').map(s => s.trim()).filter(Boolean)
+          ar: selectedProductColorKeys.map(key => PRODUCT_COLOR_OPTIONS.find(color => color.key === key)?.ar).filter(Boolean),
+          fr: selectedProductColorKeys.map(key => PRODUCT_COLOR_OPTIONS.find(color => color.key === key)?.fr).filter(Boolean)
         },
+        colorKeys: selectedProductColorKeys,
+        sizes: [...SHOE_SIZES],
         description: {
           ar: document.getElementById('pe-desc-ar').value.trim(),
           fr: document.getElementById('pe-desc-fr').value.trim()
         },
         features: {
-          ar: document.getElementById('pe-features-ar').value.split(',').map(s => s.trim()).filter(Boolean),
-          fr: document.getElementById('pe-features-fr').value.split(',').map(s => s.trim()).filter(Boolean)
+          ar: cleanProductFeatures(document.getElementById('pe-features-ar').value, 'ar'),
+          fr: cleanProductFeatures(document.getElementById('pe-features-fr').value, 'fr')
         }
       };
 
       if (existingProduct) {
         Store.updateProduct(id, newProduct);
       } else {
-        Store.addProduct({ ...newProduct, seriesQty: 0, stockStatus: 'out_of_stock' });
+        Store.addProduct({ ...newProduct, seriesQty: 0, stockStatus: 'out_of_stock', isAvailable: true });
       }
 
       modal.classList.remove('active');
@@ -687,6 +1105,16 @@ function openProductEditor(product = null) {
     const input = document.getElementById(id);
     if (input) input.disabled = !canEditPrices;
   });
+
+  selectedProductImages = product
+    ? (Array.isArray(product.images) && product.images.length ? product.images : [product.image || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg']).slice(0, 8)
+    : [];
+  selectedProductColorKeys = product ? inferProductColorKeys(product) : ['black', 'gold', 'silver'];
+  selectedProductSizes = [...SHOE_SIZES];
+  selectedProductBadge = product
+    ? (PRODUCT_BADGE_OPTIONS.find(option => option.ar === product.discountBadge?.ar || option.fr === product.discountBadge?.fr)
+      || { ar: product.discountBadge?.ar || 'جديد', fr: product.discountBadge?.fr || 'Nouveau' })
+    : PRODUCT_BADGE_OPTIONS[0];
   
   if (!product) {
     titleEl.innerHTML = `<i class="fa-solid fa-circle-plus"></i> إضافة منتج جديد`;
@@ -698,19 +1126,14 @@ function openProductEditor(product = null) {
     document.getElementById('pe-name-ar').value = '';
     document.getElementById('pe-name-fr').value = '';
     document.getElementById('pe-price').value = 3200;
-    document.getElementById('pe-series-price').value = 19200;
-    document.getElementById('pe-old-price').value = 24000;
-    document.getElementById('pe-pairs').value = 6;
-    document.getElementById('pe-badge-ar').value = 'جديد';
-    document.getElementById('pe-badge-fr').value = 'Nouveau';
-    document.getElementById('pe-image-url').value = '/images/303-3.PNG';
-    document.getElementById('pe-image-preview').src = '/images/303-3.PNG';
-    document.getElementById('pe-colors-ar').value = 'أسود ذهبي, فضي';
-    document.getElementById('pe-colors-fr').value = 'Noir dore, Argent';
+    document.getElementById('pe-series-price').value = 57600;
+    document.getElementById('pe-old-price').value = 0;
+    document.getElementById('pe-pairs').value = 18;
+    document.getElementById('pe-image-url').value = '';
     document.getElementById('pe-desc-ar').value = 'موديل سهرة فاخر مناسب للمحلات وبوتيكات الأعراس.';
     document.getElementById('pe-desc-fr').value = 'Modele de soiree elegant pour boutiques.';
-    document.getElementById('pe-features-ar').value = 'بيع بالجملة فقط, كرطون من 36 إلى 41, توصيل للمنزل أو المكتب';
-    document.getElementById('pe-features-fr').value = 'Vente en gros uniquement, Serie du 36 au 41';
+    document.getElementById('pe-features-ar').value = 'بيع بالجملة فقط, توصيل للمنزل أو المكتب';
+    document.getElementById('pe-features-fr').value = 'Vente en gros uniquement, Livraison disponible';
   } else {
     titleEl.innerHTML = `<i class="fa-solid fa-pen-to-square"></i> تعديل المنتج: ${product.name?.ar || product.id}`;
     document.getElementById('pe-id').value = product.id;
@@ -722,20 +1145,156 @@ function openProductEditor(product = null) {
     document.getElementById('pe-price').value = product.price || 0;
     document.getElementById('pe-series-price').value = product.seriesPrice || 0;
     document.getElementById('pe-old-price').value = product.oldPrice || 0;
-    document.getElementById('pe-pairs').value = product.pairsPerSeries || 6;
-    document.getElementById('pe-badge-ar').value = product.discountBadge?.ar || '';
-    document.getElementById('pe-badge-fr').value = product.discountBadge?.fr || '';
-    document.getElementById('pe-image-url').value = product.image || '';
-    document.getElementById('pe-image-preview').src = product.image || '/images/303-3.PNG';
-    document.getElementById('pe-colors-ar').value = (product.colors?.ar || []).join(', ');
-    document.getElementById('pe-colors-fr').value = (product.colors?.fr || []).join(', ');
+    document.getElementById('pe-pairs').value = product.pairsPerSeries || 18;
+    document.getElementById('pe-image-url').value = '';
     document.getElementById('pe-desc-ar').value = product.description?.ar || '';
     document.getElementById('pe-desc-fr').value = product.description?.fr || '';
     document.getElementById('pe-features-ar').value = (product.features?.ar || []).join(', ');
     document.getElementById('pe-features-fr').value = (product.features?.fr || []).join(', ');
   }
 
+  syncProductBadgeInputs();
+  renderProductBadgeOptions();
+  renderProductColorPalette();
+  renderProductSizePicker();
+  renderProductImageGallery();
+  const modalBox = modal?.querySelector('.modal-box');
+  if (modalBox) modalBox.scrollTop = 0;
   modal.classList.add('active');
+  window.requestAnimationFrame(() => {
+    if (modalBox) modalBox.scrollTop = 0;
+  });
+}
+
+function adminEditorLanguage() {
+  return localStorage.getItem('joulane_lang') === 'fr' ? 'fr' : 'ar';
+}
+
+function cleanProductFeatures(value, language) {
+  const sizePattern = language === 'fr'
+    ? /\b(?:s[eé]rie|pointures?)\b.*\b(?:3[5-9]|4[0-4])\b/i
+    : /(?:كرطون|سلسلة|مقاسات?).*(?:٣[٥-٩]|٤[٠-٤]|3[5-9]|4[0-4])/i;
+  return String(value || '')
+    .split(',')
+    .map(feature => feature.trim())
+    .filter(Boolean)
+    .filter(feature => !sizePattern.test(feature));
+}
+
+function syncProductBadgeInputs() {
+  const emptyBadge = selectedProductBadge?.ar === 'بدون شارة';
+  document.getElementById('pe-badge-ar').value = emptyBadge ? '' : (selectedProductBadge?.ar || '');
+  document.getElementById('pe-badge-fr').value = emptyBadge ? '' : (selectedProductBadge?.fr || '');
+}
+
+function renderProductBadgeOptions() {
+  const root = document.getElementById('pe-badge-options');
+  if (!root) return;
+  const language = adminEditorLanguage();
+  const options = [...PRODUCT_BADGE_OPTIONS];
+  if (selectedProductBadge && !options.some(option => option.ar === selectedProductBadge.ar && option.fr === selectedProductBadge.fr)) {
+    options.unshift(selectedProductBadge);
+  }
+  root.innerHTML = options.map(option => {
+    const selected = option.ar === selectedProductBadge?.ar && option.fr === selectedProductBadge?.fr;
+    return `<button type="button" class="pe-choice-chip ${selected ? 'is-selected' : ''}" data-badge-ar="${option.ar}" data-badge-fr="${option.fr}" role="radio" aria-checked="${selected}">
+      <strong>${language === 'fr' ? option.fr : option.ar}</strong>
+      <small>${language === 'fr' ? option.ar : option.fr}</small>
+    </button>`;
+  }).join('');
+}
+
+function renderProductColorPalette() {
+  const root = document.getElementById('pe-color-palette');
+  if (!root) return;
+  const language = adminEditorLanguage();
+  root.innerHTML = PRODUCT_COLOR_OPTIONS.map(color => {
+    const selected = selectedProductColorKeys.includes(color.key);
+    return `<button type="button" class="pe-color-choice ${selected ? 'is-selected' : ''}" data-color-key="${color.key}" aria-pressed="${selected}" title="${language === 'fr' ? color.fr : color.ar}">
+      <span class="pe-color-dot ${color.light ? 'is-light' : ''}" style="--swatch:${color.hex}">${selected ? '<i class="fa-solid fa-check"></i>' : ''}</span>
+      <small>${language === 'fr' ? color.fr : color.ar}</small>
+    </button>`;
+  }).join('');
+  document.getElementById('pe-colors-ar').value = selectedProductColorKeys.join(',');
+  document.getElementById('pe-colors-fr').value = selectedProductColorKeys.join(',');
+}
+
+function renderProductSizePicker() {
+  const root = document.getElementById('pe-size-picker');
+  if (!root) return;
+  root.innerHTML = SHOE_SIZES.map(size => `
+    <button type="button" class="pe-size-choice is-selected" data-shoe-size="${size}" aria-pressed="true" disabled>${size}</button>
+  `).join('');
+  document.getElementById('pe-sizes').value = selectedProductSizes.join(',');
+}
+
+function renderProductImageGallery() {
+  const gallery = document.getElementById('pe-images-gallery');
+  if (!gallery) return;
+  if (!selectedProductImages.length) {
+    gallery.innerHTML = `<div class="pe-images-empty"><i class="fa-regular fa-images"></i><span>أضف صورة من الهاتف أو بواسطة رابط</span></div>`;
+    return;
+  }
+  gallery.innerHTML = selectedProductImages.map((image, index) => `
+    <article class="pe-image-item ${index === 0 ? 'is-cover' : ''}" data-image-index="${index}">
+      <img src="${image}" alt="صورة المنتج ${index + 1}" draggable="false" onerror="this.src='https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg';" />
+      <span class="pe-image-order">${index + 1}</span>
+      ${index === 0 ? '<span class="pe-cover-label">الغلاف</span>' : `<button type="button" class="pe-make-cover" data-image-cover="${index}" aria-label="جعلها صورة الغلاف"><i class="fa-solid fa-star"></i></button>`}
+      <button type="button" class="pe-remove-image" data-image-remove="${index}" aria-label="حذف الصورة"><i class="fa-solid fa-xmark"></i></button>
+      <i class="fa-solid fa-grip pe-image-grip"></i>
+    </article>
+  `).join('');
+}
+
+function setupImageLongPressOrdering(gallery) {
+  if (!gallery || gallery.dataset.orderBound) return;
+  gallery.dataset.orderBound = 'true';
+  let timer = null;
+  let activeIndex = -1;
+  let startX = 0;
+  let startY = 0;
+
+  gallery.addEventListener('pointerdown', event => {
+    if (event.target.closest('button')) return;
+    const item = event.target.closest('.pe-image-item');
+    if (!item) return;
+    startX = event.clientX;
+    startY = event.clientY;
+    const index = Number(item.dataset.imageIndex);
+    timer = window.setTimeout(() => {
+      activeIndex = index;
+      item.classList.add('is-dragging');
+      navigator.vibrate?.(35);
+    }, 360);
+  });
+  gallery.addEventListener('pointermove', event => {
+    if (activeIndex < 0) {
+      if (Math.hypot(event.clientX - startX, event.clientY - startY) > 10) clearTimeout(timer);
+      return;
+    }
+    event.preventDefault();
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.pe-image-item');
+    const targetIndex = Number(target?.dataset.imageIndex);
+    if (!Number.isInteger(targetIndex) || targetIndex === activeIndex) return;
+    const [moved] = selectedProductImages.splice(activeIndex, 1);
+    selectedProductImages.splice(targetIndex, 0, moved);
+    activeIndex = targetIndex;
+    renderProductImageGallery();
+  });
+  const finish = () => {
+    clearTimeout(timer);
+    timer = null;
+    activeIndex = -1;
+    gallery.querySelectorAll('.is-dragging').forEach(item => item.classList.remove('is-dragging'));
+  };
+  gallery.addEventListener('pointerup', finish);
+  gallery.addEventListener('pointercancel', finish);
+  gallery.addEventListener('pointerleave', () => {
+    if (activeIndex < 0) clearTimeout(timer);
+  });
+  gallery.closest('.modal-box')?.addEventListener('scroll', () => {
+    if (activeIndex < 0) clearTimeout(timer);
+  }, { passive: true });
 }
 
 /* ==========================================================================
@@ -749,7 +1308,11 @@ function populateCmsForm() {
 
   Object.keys(config).forEach(key => {
     const field = form.querySelector(`[name="${key}"]`);
-    if (field) field.value = config[key];
+    if (field) {
+      field.value = typeof config[key] === 'boolean'
+        ? String(config[key])
+        : config[key];
+    }
   });
 }
 
@@ -802,142 +1365,720 @@ function setupCmsForm(refreshMainStoreFn) {
    TAB 4: ORDERS MANAGEMENT
    ========================================================================== */
 let activeOrderStatusFilter = 'all';
+let editingOrderId = null;
+let editingOrderItems = [];
+let orderEditorOpener = null;
+let orderEditorSaving = false;
+
+function notifyOrderMutationResult(result, messages = {}) {
+  if (result?.status === 'synced') {
+    notifyAdmin(messages.synced || 'تم حفظ العملية ومزامنتها مع السحابة.');
+    return;
+  }
+  if (result?.status === 'queued') {
+    notifyAdmin(messages.queued || 'تم الحفظ على هذا الجهاز، وستتم المزامنة تلقائياً عند عودة الاتصال.');
+    return;
+  }
+  if (result?.status === 'conflict') {
+    notifyAdmin(result.refreshed
+      ? 'لم يُطبّق التعديل لأن الطلب تغيّر من جهاز آخر. تم تحميل آخر نسخة آمنة.'
+      : 'يوجد تعارض مع تعديل أحدث في السحابة. حدّث الطلب ثم أعد المحاولة.');
+    return;
+  }
+  notifyAdmin('تم الحفظ محلياً، لكن تعذرت المزامنة لأن الجلسة لا تملك الصلاحية المطلوبة.');
+}
+
+function orderStatusOptions(selectedStatus) {
+  const selected = normalizeOrderStatus(selectedStatus);
+  return Object.entries(ORDER_STATUS_META).map(([key, meta]) =>
+    `<option value="${key}" ${selected === key ? 'selected' : ''}>${meta.label}</option>`
+  ).join('');
+}
+
+function orderWhatsappLink(order) {
+  const rawPhone = String(order?.phone || '').replace(/\D/g, '');
+  const waPhone = rawPhone.startsWith('0') ? `213${rawPhone.slice(1)}` : rawPhone;
+  const message = `مرحبًا ${order?.customerName || ''}، نتابع معكم طلب JOULANE Fashion رقم #${order?.id || ''}.`;
+  return waPhone ? `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}` : '#';
+}
+
+function ensureProfessionalOrdersUi() {
+  const tab = document.getElementById('tab-orders');
+  if (!tab || tab.dataset.professionalOrdersReady === 'true') return;
+  tab.dataset.professionalOrdersReady = 'true';
+
+  const header = tab.querySelector('.admin-pane-header');
+  const originalControls = tab.querySelector('.admin-pane-controls');
+  const tableWrap = tab.querySelector('.table-responsive');
+  const headerActions = header?.querySelector('.admin-top-actions');
+
+  const dashboard = document.createElement('section');
+  dashboard.className = 'orders-pro-dashboard';
+  dashboard.innerHTML = `
+    <button type="button" class="order-kpi-card is-new" data-order-filter-status="New">
+      <i class="fa-solid fa-sparkles"></i><span class="order-kpi-copy"><strong id="orders-kpi-new">0</strong><small>طلبات جديدة</small></span>
+    </button>
+    <button type="button" class="order-kpi-card is-progress" data-order-filter-status="progress">
+      <i class="fa-solid fa-spinner"></i><span class="order-kpi-copy"><strong id="orders-kpi-progress">0</strong><small>قيد المعالجة والشحن</small></span>
+    </button>
+    <button type="button" class="order-kpi-card is-delivered" data-order-filter-status="Delivered">
+      <i class="fa-solid fa-circle-check"></i><span class="order-kpi-copy"><strong id="orders-kpi-delivered">0</strong><small>طلبات مكتملة</small></span>
+    </button>
+    <div class="order-kpi-card is-revenue">
+      <i class="fa-solid fa-sack-dollar"></i><span class="order-kpi-copy"><strong id="orders-kpi-revenue">0 دج</strong><small>مبيعات مكتملة</small></span>
+    </div>
+    <div class="order-kpi-card is-average">
+      <i class="fa-solid fa-chart-simple"></i><span class="order-kpi-copy"><strong id="orders-kpi-average">0 دج</strong><small>متوسط قيمة الطلب</small></span>
+    </div>`;
+  header?.insertAdjacentElement('afterend', dashboard);
+
+  const toolbar = document.createElement('section');
+  toolbar.className = 'orders-pro-toolbar';
+  toolbar.innerHTML = `
+    <div class="orders-filter-grid" id="orders-filter-grid"></div>
+    <button type="button" id="orders-advanced-filters-toggle" class="orders-advanced-filters-toggle" aria-expanded="false">
+      <i class="fa-solid fa-sliders"></i><span>الفترة والتوصيل والترتيب</span><i class="fa-solid fa-chevron-down"></i>
+    </button>
+    <div class="orders-results-meta" aria-live="polite"><span id="orders-results-count">0 طلب</span><span id="orders-results-value">القيمة: 0 دج</span></div>`;
+
+  if (originalControls) {
+    const filterGrid = toolbar.querySelector('#orders-filter-grid');
+    const searchBox = originalControls.querySelector('.search-box');
+    const statusFilters = originalControls.querySelector('.orders-status-filters');
+    if (searchBox) filterGrid.appendChild(searchBox);
+    filterGrid.insertAdjacentHTML('beforeend', `
+      <select id="admin-orders-date-filter" class="form-control select-dark" aria-label="فترة الطلبات">
+        <option value="all">كل الفترات</option><option value="today">اليوم</option><option value="7">آخر 7 أيام</option><option value="30">آخر 30 يومًا</option>
+      </select>
+      <select id="admin-orders-delivery-filter" class="form-control select-dark" aria-label="نوع التوصيل">
+        <option value="all">كل أنواع التوصيل</option><option value="home">المنزل / المحل</option><option value="desk">المكتب</option>
+      </select>
+      <select id="admin-orders-sort" class="form-control select-dark" aria-label="ترتيب الطلبات">
+        <option value="newest">الأحدث أولًا</option><option value="oldest">الأقدم أولًا</option><option value="highest">الأعلى قيمة</option><option value="lowest">الأقل قيمة</option>
+      </select>`);
+    if (statusFilters) toolbar.appendChild(statusFilters);
+    originalControls.replaceWith(toolbar);
+  } else {
+    dashboard.insertAdjacentElement('afterend', toolbar);
+  }
+
+  if (tableWrap) {
+    tableWrap.id = 'admin-orders-table-wrap';
+    const mobileList = document.createElement('div');
+    mobileList.id = 'admin-orders-mobile-list';
+    mobileList.className = 'orders-mobile-list';
+    tableWrap.insertAdjacentElement('afterend', mobileList);
+  }
+
+  if (headerActions && !document.getElementById('refresh-orders-btn')) {
+    const refreshButton = document.createElement('button');
+    refreshButton.type = 'button';
+    refreshButton.id = 'refresh-orders-btn';
+    refreshButton.className = 'btn btn-outline-gold';
+    refreshButton.innerHTML = '<i class="fa-solid fa-rotate"></i> تحديث';
+    headerActions.prepend(refreshButton);
+  }
+
+  const clearButton = document.getElementById('clear-orders-btn');
+  if (clearButton) {
+    clearButton.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> منطقة خطرة';
+    clearButton.hidden = getCurrentAdminUser()?.id !== 'usr_super_admin';
+  }
+
+  if (!document.getElementById('order-editor-modal')) {
+    document.body.insertAdjacentHTML('beforeend', `
+      <div id="order-editor-modal" class="modal-overlay order-editor-modal" aria-hidden="true">
+        <div class="modal-box order-editor-box" role="dialog" aria-modal="true" aria-labelledby="order-editor-title">
+          <button type="button" class="modal-close" id="close-order-editor" aria-label="إغلاق">&times;</button>
+          <div class="order-editor-header">
+            <h3 id="order-editor-title"><i class="fa-solid fa-pen-to-square text-gold"></i> تعديل الطلب</h3>
+            <small id="order-editor-reference">—</small>
+          </div>
+          <form id="order-editor-form">
+            <div class="order-editor-body">
+              <div class="order-editor-layout">
+                <div class="form-group"><label for="order-edit-customer">الزبون / المحل</label><input id="order-edit-customer" class="form-control" required /></div>
+                <div class="form-group"><label for="order-edit-phone">رقم الهاتف</label><input id="order-edit-phone" class="form-control" inputmode="tel" dir="ltr" required /></div>
+                <div class="form-group"><label for="order-edit-wilaya">الولاية</label><select id="order-edit-wilaya" class="form-control select-dark" required></select></div>
+                <div class="form-group"><label for="order-edit-commune">البلدية</label><select id="order-edit-commune" class="form-control select-dark"></select></div>
+                <div class="form-group is-full"><label for="order-edit-address">العنوان</label><input id="order-edit-address" class="form-control" /></div>
+                <div class="form-group"><label for="order-edit-delivery">نوع التوصيل</label><select id="order-edit-delivery" class="form-control select-dark"><option value="home">منزل / محل</option><option value="desk">مكتب</option></select></div>
+                <div class="form-group"><label for="order-edit-status">حالة الطلب</label><select id="order-edit-status" class="form-control select-dark">${orderStatusOptions('New')}</select></div>
+                <div class="order-edit-items is-full">
+                  <div class="order-edit-items-head"><strong><i class="fa-solid fa-boxes-stacked"></i> منتجات الطلب</strong><button type="button" id="add-order-item-btn" class="btn btn-outline-gold btn-sm"><i class="fa-solid fa-plus"></i> منتج</button></div>
+                  <div id="order-edit-items-list"></div>
+                </div>
+                <div class="form-group"><label for="order-edit-shipping">تكلفة التوصيل</label><input id="order-edit-shipping" type="number" min="0" step="50" class="form-control" /></div>
+                <div class="form-group"><label for="order-edit-notes">ملاحظة داخلية</label><input id="order-edit-notes" class="form-control" placeholder="لا تظهر للزبون" /></div>
+                <div class="order-editor-summary is-full">
+                  <div><small>الكراطين</small><strong id="order-edit-cartons">0</strong></div>
+                  <div><small>المنتجات</small><strong id="order-edit-products-total">0 دج</strong></div>
+                  <div><small>المجموع النهائي</small><strong id="order-edit-grand-total">0 دج</strong></div>
+                </div>
+              </div>
+            </div>
+            <div class="order-editor-footer">
+              <button type="button" class="btn btn-outline-gold" id="cancel-order-editor">إلغاء</button>
+              <button type="submit" class="btn btn-gold" id="save-order-editor"><i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات</button>
+            </div>
+          </form>
+        </div>
+      </div>`);
+  }
+}
+
+function getFilteredOrders() {
+  let orders = [...Store.getOrders()];
+  const searchKeyword = (document.getElementById('admin-orders-search')?.value || '').trim().toLocaleLowerCase();
+  const deliveryFilter = document.getElementById('admin-orders-delivery-filter')?.value || 'all';
+  const dateFilter = document.getElementById('admin-orders-date-filter')?.value || 'all';
+  const sort = document.getElementById('admin-orders-sort')?.value || 'newest';
+
+  if (activeOrderStatusFilter === 'progress') {
+    orders = orders.filter(order => ['Confirmed', 'Shipped'].includes(normalizeOrderStatus(order.status)));
+  } else if (activeOrderStatusFilter !== 'all') {
+    orders = orders.filter(order => normalizeOrderStatus(order.status) === activeOrderStatusFilter);
+  }
+  if (deliveryFilter !== 'all') orders = orders.filter(order => order.deliveryType === deliveryFilter);
+
+  if (dateFilter !== 'all') {
+    const now = Date.now();
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const threshold = dateFilter === 'today' ? startOfToday.getTime() : now - Number(dateFilter) * 86400000;
+    orders = orders.filter(order => orderDateValue(order) >= threshold);
+  }
+
+  if (searchKeyword) {
+    orders = orders.filter(order => {
+      const searchable = [order.id, order.customerName, order.phone, order.wilaya, order.commune, order.address, order.adminNotes,
+        ...orderItemsSnapshot(order).flatMap(item => [item.nameAr, item.nameFr, item.color])]
+        .filter(Boolean).join(' ').toLocaleLowerCase();
+      return searchable.includes(searchKeyword);
+    });
+  }
+
+  orders.sort((a, b) => {
+    if (sort === 'oldest') return orderDateValue(a) - orderDateValue(b);
+    if (sort === 'highest') return adminNumber(b.totalAmount) - adminNumber(a.totalAmount);
+    if (sort === 'lowest') return adminNumber(a.totalAmount) - adminNumber(b.totalAmount);
+    return orderDateValue(b) - orderDateValue(a);
+  });
+  return orders;
+}
+
+function updateOrderKpis(allOrders, filteredOrders) {
+  const metrics = calculateOrderMetrics(allOrders);
+  const setText = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
+  setText('orders-kpi-new', metrics.newCount);
+  setText('orders-kpi-progress', metrics.inProgress);
+  setText('orders-kpi-delivered', metrics.delivered);
+  setText('orders-kpi-revenue', formatAdminDzd(metrics.completedRevenue));
+  setText('orders-kpi-average', formatAdminDzd(metrics.averageOrder));
+  setText('orders-results-count', `عرض ${filteredOrders.length} من ${allOrders.length} طلب`);
+  setText('orders-results-value', `القيمة: ${formatAdminDzd(filteredOrders.reduce((sum, order) => sum + adminNumber(order.totalAmount), 0))}`);
+
+  const counts = { all: allOrders.length, New: 0, Confirmed: 0, Shipped: 0, Delivered: 0, Cancelled: 0 };
+  allOrders.forEach(order => { counts[normalizeOrderStatus(order.status)] += 1; });
+  document.querySelectorAll('#tab-orders .status-filter-btn').forEach(button => {
+    const key = button.dataset.status;
+    const label = key === 'all' ? 'الكل' : orderStatusMeta(key).label;
+    button.innerHTML = `<span>${label}</span><b>${counts[key] || 0}</b>`;
+    button.classList.toggle('active', activeOrderStatusFilter === key);
+    button.setAttribute('aria-pressed', String(activeOrderStatusFilter === key));
+  });
+  document.querySelectorAll('#tab-orders [data-order-filter-status]').forEach(button => {
+    const key = button.dataset.orderFilterStatus;
+    const isActive = key === 'progress'
+      ? activeOrderStatusFilter === 'progress'
+      : activeOrderStatusFilter === key;
+    button.setAttribute('aria-pressed', String(isActive));
+  });
+}
+
+function renderOrderItemsCompact(order, limit = 3) {
+  const items = orderItemsSnapshot(order);
+  const visible = items.slice(0, limit).map(item =>
+    `<div><span><strong>${escapeAdminHtml(item.nameAr)}</strong> · ${escapeAdminHtml(item.color)}</span><b>${item.seriesQty} كرطون</b></div>`
+  ).join('');
+  return `${visible}${items.length > limit ? `<small>+ ${items.length - limit} منتجات أخرى</small>` : ''}`;
+}
+
+function renderOrderActionButtons(order) {
+  const id = escapeAdminHtml(order.id);
+  return `
+    <div class="order-action-grid">
+      <button type="button" class="btn btn-outline-gold btn-sm edit-order-btn" data-id="${id}" aria-label="عرض وتعديل الطلب ${id}"><i class="fa-solid fa-pen"></i></button>
+      <button type="button" class="btn btn-outline-white btn-sm copy-order-btn" data-id="${id}" aria-label="نسخ ملخص الطلب ${id}"><i class="fa-regular fa-copy"></i></button>
+      <a href="${orderWhatsappLink(order)}" target="_blank" rel="noopener" class="btn btn-whatsapp btn-sm" aria-label="مراسلة الزبون على واتساب"><i class="fa-brands fa-whatsapp"></i></a>
+      <button type="button" class="btn btn-danger-outline btn-sm delete-order-btn" data-id="${id}" aria-label="حذف الطلب ${id}"><i class="fa-solid fa-trash"></i></button>
+    </div>`;
+}
 
 function setupOrdersTab() {
+  ensureProfessionalOrdersUi();
+  const tab = document.getElementById('tab-orders');
   const searchInput = document.getElementById('admin-orders-search');
   if (searchInput) searchInput.addEventListener('input', renderOrdersTab);
+  ['admin-orders-date-filter', 'admin-orders-delivery-filter', 'admin-orders-sort'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', renderOrdersTab);
+  });
 
-  document.querySelectorAll('.status-filter-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      document.querySelectorAll('.status-filter-btn').forEach(b => b.classList.remove('active'));
-      e.currentTarget.classList.add('active');
-      activeOrderStatusFilter = e.currentTarget.dataset.status;
+  tab?.addEventListener('click', async event => {
+    const statusFilter = event.target.closest('.status-filter-btn');
+    const kpiFilter = event.target.closest('[data-order-filter-status]');
+    const editButton = event.target.closest('.edit-order-btn');
+    const copyButton = event.target.closest('.copy-order-btn');
+    const deleteButton = event.target.closest('.delete-order-btn');
+    const advancedFiltersButton = event.target.closest('#orders-advanced-filters-toggle');
+    if (advancedFiltersButton) {
+      const toolbar = advancedFiltersButton.closest('.orders-pro-toolbar');
+      const isOpen = toolbar?.classList.toggle('show-advanced') || false;
+      advancedFiltersButton.setAttribute('aria-expanded', String(isOpen));
+      return;
+    }
+    if (statusFilter || kpiFilter) {
+      activeOrderStatusFilter = (statusFilter || kpiFilter).dataset.status || (statusFilter || kpiFilter).dataset.orderFilterStatus || 'all';
       renderOrdersTab();
-    });
+      return;
+    }
+    if (editButton) openOrderEditor(editButton.dataset.id);
+    if (copyButton) await copyOrderSummary(copyButton.dataset.id);
+    if (deleteButton) await deleteOrderWithConfirmation(deleteButton.dataset.id);
+  });
+
+  tab?.addEventListener('change', async event => {
+    const select = event.target.closest('.order-status-select');
+    if (!select || !requireAdminPermission('adminOrders')) return;
+    const status = normalizeOrderStatus(select.value);
+    const order = Store.getOrders().find(item => item.id === select.dataset.id);
+    const user = getCurrentAdminUser();
+    const history = [...(Array.isArray(order?.history) ? order.history : []), {
+      action: 'status_changed', status, at: new Date().toISOString(), by: user?.name || user?.id || 'admin'
+    }].slice(-30);
+    select.disabled = true;
+    try {
+      const result = await Store.updateOrder(select.dataset.id, { status, history, updatedBy: user?.name || user?.id || 'admin' });
+      notifyOrderMutationResult(result, {
+        synced: `تم تحديث حالة الطلب إلى: ${orderStatusMeta(status).label} ومزامنتها.`,
+        queued: `تم تحديث الحالة إلى: ${orderStatusMeta(status).label} محلياً، وستتزامن تلقائياً عند عودة الاتصال.`
+      });
+    } finally {
+      if (select.isConnected) select.disabled = false;
+    }
   });
 
   document.getElementById('export-csv-btn')?.addEventListener('click', () => {
-    if (requireAdminPermission('adminOrders')) exportOrdersCsv();
+    if (requireAdminPermission('adminOrders')) exportOrdersCsv(true);
   });
-  document.getElementById('clear-orders-btn')?.addEventListener('click', () => {
-    if (!requireAdminPermission('adminOrders')) return;
-    if (confirm('هل أنت متأكد من رغبتك في مسح كل سجل الطلبات؟')) {
-      Store.clearOrders();
+  document.getElementById('refresh-orders-btn')?.addEventListener('click', async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.classList.add('is-loading');
+    try {
+      const refreshed = await Store.initSupabase(null, { force: true });
       renderOrdersTab();
-      renderOverviewTab();
+      notifyAdmin(refreshed
+        ? 'تم تحديث الطلبات من السحابة.'
+        : 'تعذر الاتصال بالسحابة؛ ما زالت النسخة المحلية ظاهرة ويمكنك المحاولة لاحقًا.');
+    } catch (error) {
+      console.error('Orders refresh failed:', error);
+      notifyAdmin('تعذر تحديث الطلبات الآن. تحقق من الاتصال وحاول مرة أخرى.');
+    } finally {
+      button.disabled = false;
+      button.classList.remove('is-loading');
     }
   });
+  document.getElementById('clear-orders-btn')?.addEventListener('click', async () => {
+    if (!requireAdminPermission('adminOrders') || getCurrentAdminUser()?.id !== 'usr_super_admin') return;
+    const phrase = prompt('هذه العملية تحذف جميع الطلبات نهائيًا. اكتب: حذف الكل');
+    if (phrase?.trim() === 'حذف الكل') {
+      const result = await Store.clearOrders();
+      notifyOrderMutationResult(result, {
+        synced: 'تم حذف سجل الطلبات بالكامل ومزامنة الحذف.',
+        queued: 'تم حذف سجل الطلبات من هذا الجهاز، وستتم مزامنة الحذف تلقائياً عند عودة الاتصال.'
+      });
+    }
+  });
+
+  setupOrderEditor();
 }
 
 function renderOrdersTab() {
   if (!hasAdminPermission('adminOrders')) return;
+  ensureProfessionalOrdersUi();
   const tbody = document.getElementById('admin-orders-tbody');
+  const mobileList = document.getElementById('admin-orders-mobile-list');
   const countBadge = document.getElementById('admin-orders-tab-count');
-  if (!tbody) return;
+  const clearButton = document.getElementById('clear-orders-btn');
+  if (clearButton) clearButton.hidden = getCurrentAdminUser()?.id !== 'usr_super_admin';
+  if (!tbody || !mobileList) return;
 
-  let orders = Store.getOrders();
-  if (countBadge) countBadge.textContent = orders.length;
+  const allOrders = Store.getOrders();
+  const orders = getFilteredOrders();
+  if (countBadge) countBadge.textContent = allOrders.length;
+  updateOrderKpis(allOrders, orders);
 
-  const searchKeyword = (document.getElementById('admin-orders-search')?.value || '').toLowerCase();
-
-  if (activeOrderStatusFilter !== 'all') {
-    orders = orders.filter(o => o.status === activeOrderStatusFilter);
-  }
-
-  if (searchKeyword) {
-    orders = orders.filter(o => 
-      (o.id && o.id.toLowerCase().includes(searchKeyword)) ||
-      (o.customerName && o.customerName.toLowerCase().includes(searchKeyword)) ||
-      (o.phone && o.phone.includes(searchKeyword)) ||
-      (o.wilaya && o.wilaya.toLowerCase().includes(searchKeyword))
-    );
-  }
-
-  if (orders.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--muted); padding: 30px;">لا توجد طلبات مطابقة للفلاتر</td></tr>`;
+  if (!orders.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="admin-table-empty-cell" style="text-align:center;padding:30px;color:var(--muted);">لا توجد طلبات مطابقة للفلاتر</td></tr>';
+    mobileList.innerHTML = '<div class="admin-empty-state"><i class="fa-solid fa-magnifying-glass"></i><strong>لا توجد نتائج</strong><small>غيّر البحث أو الفلاتر لعرض طلبات أخرى.</small></div>';
     return;
   }
 
-  tbody.innerHTML = orders.map(o => {
-    const status = o.status || 'New';
-    const rawPhone = (o.phone || '').replace(/\D/g, '');
-    const waPhone = rawPhone.startsWith('0') ? `213${rawPhone.slice(1)}` : rawPhone;
-    const waText = encodeURIComponent(`مرحبا ${o.customerName}، نقوم بمتابعة طلبكم للعرائس والمحلات مرجع #${o.id} من متجر JOULANE Fashion.`);
-    const waLink = `https://wa.me/${waPhone}?text=${waText}`;
-
+  tbody.innerHTML = orders.map(order => {
+    const status = orderStatusMeta(order.status);
+    const items = orderItemsSnapshot(order);
+    const phoneHref = String(order.phone || '').replace(/[^\d+]/g, '');
     return `
-      <tr>
-        <td><strong>#${o.id}</strong></td>
-        <td><small>${o.timestamp || ''}</small></td>
-        <td><strong>${o.customerName}</strong></td>
-        <td><a href="tel:${o.phone}" dir="ltr">${o.phone}</a></td>
-        <td>${o.wilaya}<br/><small class="text-muted">${o.commune || ''}</small></td>
-        <td>${o.deliveryLabel || (o.deliveryType === 'home' ? 'منزل/محل' : 'مكتب')}</td>
-        <td>${o.items ? o.items.map(i => `• ${i.nameAr} (${i.color})`).join('<br/>') : `${o.productName}<br/><small class="text-muted">اللون: ${o.color || 'افتراضي'}</small>`}</td>
-        <td>${o.items ? `${o.items.reduce((s, i) => s + i.seriesQty, 0)} كرطون` : (o.seriesQty || '1 كرطون')}</td>
-        <td><strong>${(o.totalAmount || 0).toLocaleString()} دج</strong></td>
-        <td>
-          <select class="order-status-select ${status}" data-id="${o.id}">
-            <option value="New" ${status === 'New' ? 'selected' : ''}>جديد</option>
-            <option value="Confirmed" ${status === 'Confirmed' ? 'selected' : ''}>مؤكد</option>
-            <option value="Shipped" ${status === 'Shipped' ? 'selected' : ''}>تم الشحن</option>
-            <option value="Delivered" ${status === 'Delivered' ? 'selected' : ''}>مكتمل</option>
-            <option value="Cancelled" ${status === 'Cancelled' ? 'selected' : ''}>ملغى</option>
-          </select>
-        </td>
-        <td>
-          <div style="display: flex; gap: 4px;">
-            <a href="${waLink}" target="_blank" class="btn btn-whatsapp btn-sm" title="واتساب"><i class="fa-brands fa-whatsapp"></i></a>
-            <button class="btn btn-danger-outline btn-sm delete-order-btn" data-id="${o.id}" title="حذف"><i class="fa-solid fa-trash"></i></button>
-          </div>
-        </td>
-      </tr>
-    `;
+      <tr data-order-id="${escapeAdminHtml(order.id)}">
+        <td><strong>#${escapeAdminHtml(order.id)}</strong></td>
+        <td><small>${escapeAdminHtml(order.timestamp || '')}</small></td>
+        <td><strong>${escapeAdminHtml(order.customerName)}</strong>${order.adminNotes ? '<br/><small class="text-muted"><i class="fa-solid fa-note-sticky"></i> ملاحظة</small>' : ''}</td>
+        <td><a href="tel:${phoneHref}" dir="ltr">${escapeAdminHtml(order.phone)}</a></td>
+        <td>${escapeAdminHtml(order.wilaya)}<br/><small class="text-muted">${escapeAdminHtml(order.commune || '')}</small></td>
+        <td>${escapeAdminHtml(order.deliveryLabel || (order.deliveryType === 'home' ? 'منزل / محل' : 'مكتب'))}</td>
+        <td><div class="order-items-compact">${renderOrderItemsCompact(order, 2)}</div></td>
+        <td>${items.reduce((sum, item) => sum + item.seriesQty, 0)} كرطون</td>
+        <td><strong>${formatAdminDzd(order.totalAmount)}</strong></td>
+        <td><select class="order-status-select is-${status.key.toLowerCase()}" data-status="${status.key}" data-id="${escapeAdminHtml(order.id)}" aria-label="حالة الطلب ${escapeAdminHtml(order.id)}">${orderStatusOptions(status.key)}</select></td>
+        <td>${renderOrderActionButtons(order)}</td>
+      </tr>`;
   }).join('');
 
-  // Dropdown status change listener
-  tbody.querySelectorAll('.order-status-select').forEach(select => {
-    select.addEventListener('change', (e) => {
-      if (!requireAdminPermission('adminOrders')) return;
-      const orderId = e.currentTarget.dataset.id;
-      const newStatus = e.currentTarget.value;
-      Store.updateOrderStatus(orderId, newStatus);
-      renderOrdersTab();
-      renderOverviewTab();
-    });
-  });
+  mobileList.innerHTML = orders.map(order => {
+    const status = orderStatusMeta(order.status);
+    const phoneHref = String(order.phone || '').replace(/[^\d+]/g, '');
+    return `
+      <article class="order-mobile-card is-${status.key.toLowerCase()}" data-order-id="${escapeAdminHtml(order.id)}">
+        <div class="order-mobile-head">
+          <div><h4>#${escapeAdminHtml(order.id)}</h4><small>${escapeAdminHtml(order.timestamp || '')}</small></div>
+          <select class="order-status-select is-${status.key.toLowerCase()}" data-status="${status.key}" data-id="${escapeAdminHtml(order.id)}" aria-label="حالة الطلب ${escapeAdminHtml(order.id)}">${orderStatusOptions(status.key)}</select>
+        </div>
+        <div class="order-mobile-customer">
+          <i class="fa-solid fa-user"></i>
+          <div><strong>${escapeAdminHtml(order.customerName)}</strong><a href="tel:${phoneHref}" dir="ltr">${escapeAdminHtml(order.phone)}</a></div>
+          <strong class="text-gold">${formatAdminDzd(order.totalAmount)}</strong>
+        </div>
+        <div class="order-mobile-meta">
+          <div><small>المكان</small><strong>${escapeAdminHtml(order.wilaya)} · ${escapeAdminHtml(order.commune || '')}</strong></div>
+          <div><small>التوصيل</small><strong>${escapeAdminHtml(order.deliveryLabel || (order.deliveryType === 'home' ? 'منزل / محل' : 'مكتب'))}</strong></div>
+          <div><small>الكمية</small><strong>${orderCartonCount(order)} كرطون</strong></div>
+          <div><small>الحالة</small><strong>${status.label}</strong></div>
+        </div>
+        <div class="order-mobile-items">${renderOrderItemsCompact(order)}</div>
+        <div class="order-mobile-actions">
+          <button type="button" class="btn btn-gold edit-order-btn" data-id="${escapeAdminHtml(order.id)}"><i class="fa-solid fa-pen"></i> تعديل</button>
+          <button type="button" class="btn btn-outline-gold copy-order-btn" data-id="${escapeAdminHtml(order.id)}"><i class="fa-regular fa-copy"></i> نسخ</button>
+          <a href="${orderWhatsappLink(order)}" target="_blank" rel="noopener" class="btn btn-whatsapp"><i class="fa-brands fa-whatsapp"></i> واتساب</a>
+          <button type="button" class="btn btn-danger-outline delete-order-btn" data-id="${escapeAdminHtml(order.id)}" aria-label="حذف الطلب ${escapeAdminHtml(order.id)}"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </article>`;
+  }).join('');
+}
 
-  // Delete individual order
-  tbody.querySelectorAll('.delete-order-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      if (!requireAdminPermission('adminOrders')) return;
-      const id = e.currentTarget.dataset.id;
-      if (confirm(`حذف الطلب #${id}؟`)) {
-        Store.deleteOrder(id);
-        renderOrdersTab();
-        renderOverviewTab();
+function findOrderWilaya(value) {
+  const normalized = String(value || '').trim().toLocaleLowerCase();
+  return WILAYAS.find(wilaya => [wilaya.nameAr, wilaya.nameFr, String(wilaya.code)]
+    .some(candidate => String(candidate || '').trim().toLocaleLowerCase() === normalized));
+}
+
+function populateOrderWilayaOptions(selectedValue = '') {
+  const select = document.getElementById('order-edit-wilaya');
+  if (!select) return null;
+  const match = findOrderWilaya(selectedValue);
+  const selectedName = match?.nameAr || String(selectedValue || '').trim();
+  const unknownOption = selectedName && !match
+    ? `<option value="${escapeAdminHtml(selectedName)}">${escapeAdminHtml(selectedName)}</option>`
+    : '';
+  select.innerHTML = `<option value="">اختر الولاية</option>${unknownOption}${WILAYAS.map(wilaya =>
+    `<option value="${escapeAdminHtml(wilaya.nameAr)}">${wilaya.code} — ${escapeAdminHtml(wilaya.nameAr)} / ${escapeAdminHtml(wilaya.nameFr)}</option>`
+  ).join('')}`;
+  select.value = selectedName;
+  return match;
+}
+
+function populateOrderCommuneOptions(wilayaValue = '', selectedValue = '') {
+  const select = document.getElementById('order-edit-commune');
+  if (!select) return;
+  const wilaya = findOrderWilaya(wilayaValue);
+  const communes = Array.from(new Set([...(wilaya?.communesAr || []), ...(wilaya?.communesFr || [])]
+    .map(value => String(value || '').trim()).filter(Boolean)));
+  const selected = String(selectedValue || '').trim();
+  if (selected && !communes.includes(selected)) communes.unshift(selected);
+  select.innerHTML = `<option value="">اختر البلدية</option>${communes.map(commune =>
+    `<option value="${escapeAdminHtml(commune)}">${escapeAdminHtml(commune)}</option>`
+  ).join('')}`;
+  select.value = selected;
+}
+
+function renderOrderEditorItems() {
+  const root = document.getElementById('order-edit-items-list');
+  if (!root) return;
+  root.innerHTML = editingOrderItems.map((item, index) => `
+    <div class="order-edit-item" data-index="${index}">
+      <div class="form-group"><label for="order-item-name-${index}">المنتج</label><input id="order-item-name-${index}" class="form-control order-item-field" data-field="nameAr" value="${escapeAdminHtml(item.nameAr)}" required /></div>
+      <div class="form-group"><label for="order-item-color-${index}">الألوان</label><input id="order-item-color-${index}" class="form-control order-item-field" data-field="color" value="${escapeAdminHtml(item.color)}" /></div>
+      <div class="form-group"><label for="order-item-qty-${index}">الكراطين</label><input id="order-item-qty-${index}" type="number" min="1" class="form-control order-item-field" data-field="seriesQty" value="${item.seriesQty}" /></div>
+      <div class="form-group"><label for="order-item-price-${index}">السعر الإجمالي</label><input id="order-item-price-${index}" type="number" min="0" class="form-control order-item-field" data-field="price" value="${adminNumber(item.price)}" /></div>
+      <button type="button" class="btn btn-danger-outline remove-order-item-btn" data-index="${index}" aria-label="حذف المنتج"><i class="fa-solid fa-trash"></i></button>
+    </div>`).join('');
+  recalculateOrderEditor();
+}
+
+function recalculateOrderEditor() {
+  const productTotal = editingOrderItems.reduce((sum, item) => sum + adminNumber(item.price), 0);
+  const cartons = editingOrderItems.reduce((sum, item) => sum + Math.max(1, parseInt(item.seriesQty, 10) || 1), 0);
+  const shipping = adminNumber(document.getElementById('order-edit-shipping')?.value);
+  const setText = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
+  setText('order-edit-cartons', `${cartons} كرطون`);
+  setText('order-edit-products-total', formatAdminDzd(productTotal));
+  setText('order-edit-grand-total', formatAdminDzd(productTotal + shipping));
+}
+
+function openOrderEditor(orderId) {
+  if (!requireAdminPermission('adminOrders')) return;
+  const order = Store.getOrders().find(item => item.id === orderId);
+  const modal = document.getElementById('order-editor-modal');
+  if (!order || !modal) return;
+  editingOrderId = order.id;
+  orderEditorOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  editingOrderItems = orderItemsSnapshot(order).map(item => ({ ...item }));
+  const setValue = (id, value) => { const element = document.getElementById(id); if (element) element.value = value ?? ''; };
+  setValue('order-edit-customer', order.customerName);
+  setValue('order-edit-phone', order.phone);
+  const selectedWilaya = populateOrderWilayaOptions(order.wilaya);
+  populateOrderCommuneOptions(selectedWilaya?.nameAr || order.wilaya, order.commune);
+  setValue('order-edit-address', order.address);
+  setValue('order-edit-delivery', order.deliveryType || 'home');
+  setValue('order-edit-status', normalizeOrderStatus(order.status));
+  setValue('order-edit-shipping', adminNumber(order.shippingFee));
+  setValue('order-edit-notes', order.adminNotes || '');
+  document.getElementById('order-editor-reference').textContent = `#${order.id} · ${order.timestamp || ''}`;
+  renderOrderEditorItems();
+  modal.scrollTop = 0;
+  modal.classList.add('active');
+  modal.setAttribute('aria-hidden', 'false');
+  setTimeout(() => document.getElementById('order-edit-customer')?.focus(), 80);
+}
+
+function closeOrderEditor(force = false) {
+  if (orderEditorSaving && !force) return;
+  const modal = document.getElementById('order-editor-modal');
+  modal?.classList.remove('active');
+  modal?.setAttribute('aria-hidden', 'true');
+  editingOrderId = null;
+  editingOrderItems = [];
+  const opener = orderEditorOpener;
+  orderEditorOpener = null;
+  if (opener?.isConnected) setTimeout(() => opener.focus(), 0);
+}
+
+function setupOrderEditor() {
+  const modal = document.getElementById('order-editor-modal');
+  const form = document.getElementById('order-editor-form');
+  if (!modal || !form || modal.dataset.bound === 'true') return;
+  modal.dataset.bound = 'true';
+  document.getElementById('close-order-editor')?.addEventListener('click', () => closeOrderEditor());
+  document.getElementById('cancel-order-editor')?.addEventListener('click', () => closeOrderEditor());
+  modal.addEventListener('click', event => { if (event.target === modal) closeOrderEditor(); });
+  document.getElementById('order-edit-shipping')?.addEventListener('input', recalculateOrderEditor);
+  document.getElementById('order-edit-wilaya')?.addEventListener('change', event => {
+    populateOrderCommuneOptions(event.currentTarget.value, '');
+  });
+  document.getElementById('add-order-item-btn')?.addEventListener('click', () => {
+    editingOrderItems.push({ productId: `manual-${Date.now()}`, nameAr: 'منتج جديد', nameFr: 'Produit', color: 'افتراضي', seriesQty: 1, pairsCount: 0, pairsPerSeries: 18, seriesPrice: 0, price: 0 });
+    renderOrderEditorItems();
+  });
+  document.getElementById('order-edit-items-list')?.addEventListener('input', event => {
+    const input = event.target.closest('.order-item-field');
+    const row = event.target.closest('.order-edit-item');
+    if (!input || !row) return;
+    const index = Number(row.dataset.index);
+    const item = editingOrderItems[index];
+    if (!item) return;
+    const field = input.dataset.field;
+    if (field === 'seriesQty') {
+      const oldQty = Math.max(1, parseInt(item.seriesQty, 10) || 1);
+      const unitPrice = adminNumber(item.seriesPrice) || adminNumber(item.price) / oldQty;
+      item.seriesQty = Math.max(1, parseInt(input.value, 10) || 1);
+      item.price = Math.round(unitPrice * item.seriesQty);
+      item.pairsCount = item.seriesQty * (adminNumber(item.pairsPerSeries) || 18);
+      const priceInput = row.querySelector('[data-field="price"]');
+      if (priceInput) priceInput.value = item.price;
+    } else if (field === 'price') {
+      item.price = Math.max(0, adminNumber(input.value));
+      item.seriesPrice = item.price / Math.max(1, item.seriesQty);
+    } else {
+      item[field] = input.value;
+    }
+    recalculateOrderEditor();
+  });
+  document.getElementById('order-edit-items-list')?.addEventListener('click', event => {
+    const button = event.target.closest('.remove-order-item-btn');
+    if (!button || editingOrderItems.length <= 1) return;
+    editingOrderItems.splice(Number(button.dataset.index), 1);
+    renderOrderEditorItems();
+  });
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (orderEditorSaving || !editingOrderId || !requireAdminPermission('adminOrders')) return;
+    const existing = Store.getOrders().find(order => order.id === editingOrderId);
+    if (!existing || !editingOrderItems.length) return;
+    const customerName = document.getElementById('order-edit-customer').value.trim();
+    const phone = document.getElementById('order-edit-phone').value.trim();
+    if (!customerName || !phone) {
+      notifyAdmin('أدخل اسم الزبون ورقم الهاتف قبل الحفظ.');
+      return;
+    }
+    const items = editingOrderItems.map(item => ({
+      ...item,
+      nameAr: String(item.nameAr || 'منتج').trim(),
+      nameFr: String(item.nameFr || item.nameAr || 'Produit').trim(),
+      color: String(item.color || 'افتراضي').trim(),
+      seriesQty: Math.max(1, parseInt(item.seriesQty, 10) || 1),
+      pairsPerSeries: Math.max(1, parseInt(item.pairsPerSeries, 10) || 18),
+      pairsCount: Math.max(1, parseInt(item.seriesQty, 10) || 1) * Math.max(1, parseInt(item.pairsPerSeries, 10) || 18),
+      seriesPrice: adminNumber(item.seriesPrice) || adminNumber(item.price) / Math.max(1, parseInt(item.seriesQty, 10) || 1),
+      price: Math.max(0, adminNumber(item.price))
+    }));
+    const productPrice = items.reduce((sum, item) => sum + item.price, 0);
+    const shippingFee = Math.max(0, adminNumber(document.getElementById('order-edit-shipping').value));
+    const totalCartons = items.reduce((sum, item) => sum + item.seriesQty, 0);
+    const deliveryType = document.getElementById('order-edit-delivery').value === 'desk' ? 'desk' : 'home';
+    const user = getCurrentAdminUser();
+    const actor = user?.name || user?.id || 'admin';
+    const editedAt = new Date().toISOString();
+    const nextStatus = normalizeOrderStatus(document.getElementById('order-edit-status').value);
+    const statusHistory = nextStatus !== normalizeOrderStatus(existing.status)
+      ? [{ action: 'status_changed', status: nextStatus, at: editedAt, by: actor }]
+      : [];
+    const history = [
+      ...(Array.isArray(existing.history) ? existing.history : []),
+      ...statusHistory,
+      { action: 'edited', at: editedAt, by: actor }
+    ].slice(-30);
+    const orderId = editingOrderId;
+    const saveButton = document.getElementById('save-order-editor');
+    const saveButtonHtml = saveButton?.innerHTML || '';
+    orderEditorSaving = true;
+    form.setAttribute('aria-busy', 'true');
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جارٍ الحفظ...';
+    }
+    try {
+      const result = await Store.updateOrder(orderId, {
+        customerName,
+        phone,
+        wilaya: document.getElementById('order-edit-wilaya').value.trim(),
+        commune: document.getElementById('order-edit-commune').value.trim(),
+        address: document.getElementById('order-edit-address').value.trim(),
+        deliveryType,
+        deliveryLabel: deliveryType === 'home' ? 'توصيل للمنزل / المحل' : 'توصيل للمكتب',
+        status: nextStatus,
+        adminNotes: document.getElementById('order-edit-notes').value.trim(),
+        items,
+        productName: items.length === 1 ? items[0].nameAr : `طلب موحد (${items.length} موديلات)`,
+        color: items[0]?.color || 'افتراضي',
+        seriesQty: `${totalCartons} كرطون`,
+        productPrice,
+        shippingFee,
+        totalAmount: productPrice + shippingFee,
+        updatedBy: actor,
+        history
+      });
+      closeOrderEditor(true);
+      notifyOrderMutationResult(result, {
+        synced: `تم حفظ تعديلات الطلب #${orderId} ومزامنتها.`,
+        queued: `تم حفظ تعديلات الطلب #${orderId} محلياً، وستتزامن تلقائياً عند عودة الاتصال.`
+      });
+    } catch (error) {
+      console.error('Order editor save failed:', error);
+      notifyAdmin('تعذر إكمال حفظ الطلب الآن. راجع البيانات وحاول مرة أخرى.');
+    } finally {
+      orderEditorSaving = false;
+      form.removeAttribute('aria-busy');
+      if (saveButton) {
+        saveButton.disabled = false;
+        saveButton.innerHTML = saveButtonHtml;
       }
-    });
+    }
   });
 }
 
-function exportOrdersCsv() {
+async function copyOrderSummary(orderId) {
+  const order = Store.getOrders().find(item => item.id === orderId);
+  if (!order) return;
+  const lines = [
+    `طلب #${order.id}`,
+    `الزبون: ${order.customerName || ''}`,
+    `الهاتف: ${order.phone || ''}`,
+    `المكان: ${order.wilaya || ''} - ${order.commune || ''}`,
+    ...orderItemsSnapshot(order).map(item => `• ${item.nameAr} (${item.color}) × ${item.seriesQty} كرطون`),
+    `المجموع: ${formatAdminDzd(order.totalAmount)}`,
+    `الحالة: ${orderStatusMeta(order.status).label}`
+  ];
+  const text = lines.join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (_) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+  }
+  notifyAdmin('تم نسخ ملخص الطلب.');
+}
+
+async function deleteOrderWithConfirmation(orderId) {
   if (!requireAdminPermission('adminOrders')) return;
-  const orders = Store.getOrders();
-  if (orders.length === 0) {
-    alert('لا توجد طلبات للتصدير حالياً.');
+  const order = Store.getOrders().find(item => item.id === orderId);
+  if (!order) return;
+  if (confirm(`حذف الطلب #${orderId} الخاص بـ ${order.customerName || 'الزبون'} نهائيًا؟`)) {
+    const result = await Store.deleteOrder(orderId);
+    notifyOrderMutationResult(result, {
+      synced: `تم حذف الطلب #${orderId} ومزامنة الحذف.`,
+      queued: `تم حذف الطلب #${orderId} من هذا الجهاز، وستتم مزامنة الحذف تلقائياً عند عودة الاتصال.`
+    });
+  }
+}
+
+function csvCell(value) {
+  let text = String(value ?? '').replace(/\r?\n/g, ' ').trim();
+  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function exportOrdersCsv(useCurrentFilters = false) {
+  if (!requireAdminPermission('adminOrders')) return;
+  const orders = useCurrentFilters ? getFilteredOrders() : Store.getOrders();
+  if (!orders.length) {
+    notifyAdmin('لا توجد طلبات مطابقة للتصدير.');
     return;
   }
-  let csv = "\uFEFFOrder,Date,Customer,Phone,Wilaya,Commune,Address,Delivery,Product,Color,Quantity,Total,Status\n";
-  orders.forEach(o => {
-    csv += `"${o.id}","${o.timestamp || ''}","${o.customerName}","${o.phone}","${o.wilaya}","${o.commune}","${o.address}","${o.deliveryLabel || o.deliveryType}","${o.productName}","${o.color}","${o.seriesQty}","${o.totalAmount}","${o.status || 'New'}"\n`;
+  const rows = [[
+    'Order', 'Date ISO', 'Display Date', 'Customer', 'Phone', 'Wilaya', 'Commune', 'Address', 'Delivery',
+    'Product', 'Color', 'Cartons', 'Item Price', 'Shipping', 'Order Total', 'Status', 'Admin Notes'
+  ]];
+  orders.forEach(order => {
+    orderItemsSnapshot(order).forEach((item, itemIndex) => rows.push([
+      order.id, order.createdAt || '', order.timestamp || '', order.customerName, order.phone, order.wilaya, order.commune,
+      order.address, order.deliveryLabel || order.deliveryType, item.nameAr, item.color, item.seriesQty, item.price,
+      itemIndex === 0 ? order.shippingFee : '', itemIndex === 0 ? order.totalAmount : '', orderStatusMeta(order.status).label, order.adminNotes || ''
+    ]));
   });
+  const csv = `\uFEFF${rows.map(row => row.map(csvCell).join(',')).join('\n')}`;
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = `joulane_orders_${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /* ==========================================================================
@@ -950,7 +2091,9 @@ function setupShippingTab() {
       if (!requireAdminPermission('adminShipping')) return;
       const tbody = document.getElementById('shipping-rates-tbody');
       if (!tbody) return;
-      const rates = {};
+      const rates = {
+        _showPrices: document.getElementById('show-delivery-prices-toggle')?.checked === true
+      };
       tbody.querySelectorAll('tr').forEach(tr => {
         const code = tr.dataset.code;
         const homeInput = tr.querySelector('.ship-home-input');
@@ -974,6 +2117,8 @@ function renderShippingTab() {
   if (!tbody) return;
 
   const currentRates = Store.getShippingRates();
+  const showPricesToggle = document.getElementById('show-delivery-prices-toggle');
+  if (showPricesToggle) showPricesToggle.checked = currentRates._showPrices === true;
 
   tbody.innerHTML = WILAYAS.map(w => {
     const rate = currentRates[w.code] || { homePrice: w.homePrice, deskPrice: w.deskPrice };
@@ -996,6 +2141,47 @@ function normalizeWhatsAppPhone(value) {
   return digits;
 }
 
+function createStockRecipientField(recipient = {}, index = 0) {
+  const row = document.createElement('div');
+  row.className = 'stock-recipient-field';
+  row.dataset.recipientId = recipient.id || `recipient_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  row.innerHTML = `
+    <span class="stock-recipient-number"></span>
+    <div class="form-group">
+      <label>اسم المستلم</label>
+      <input type="text" class="form-control stock-recipient-name" autocomplete="off" placeholder="مثال: مسؤول الإدارة" />
+    </div>
+    <div class="form-group">
+      <label>رقم واتساب</label>
+      <input type="tel" inputmode="tel" dir="ltr" class="form-control stock-recipient-phone" autocomplete="tel" placeholder="+213 555 000 000" />
+    </div>
+    <button type="button" class="stock-recipient-remove" aria-label="حذف هذا المستلم" title="حذف المستلم">
+      <i class="fa-solid fa-trash-can"></i>
+    </button>
+  `;
+  row.querySelector('.stock-recipient-name').value = recipient.name || '';
+  row.querySelector('.stock-recipient-phone').value = recipient.phone || '';
+  updateStockRecipientFieldIndex(row, index);
+  return row;
+}
+
+function updateStockRecipientFieldIndex(row, index) {
+  row.dataset.recipientIndex = String(index);
+  const fieldNumber = index + 1;
+  const nameInput = row.querySelector('.stock-recipient-name');
+  const phoneInput = row.querySelector('.stock-recipient-phone');
+  const labels = row.querySelectorAll('label');
+  row.querySelector('.stock-recipient-number').textContent = String(fieldNumber);
+  nameInput.id = `stock-recipient-name-${fieldNumber}`;
+  phoneInput.id = `stock-recipient-phone-${fieldNumber}`;
+  if (labels[0]) labels[0].htmlFor = nameInput.id;
+  if (labels[1]) labels[1].htmlFor = phoneInput.id;
+}
+
+function renumberStockRecipientFields(fields) {
+  fields.querySelectorAll('.stock-recipient-field').forEach(updateStockRecipientFieldIndex);
+}
+
 function populateStockReceiptRecipientsForm() {
   const card = document.getElementById('stock-receipt-settings-card');
   if (!card) return;
@@ -1005,14 +2191,9 @@ function populateStockReceiptRecipientsForm() {
   if (!isSuperAdmin) return;
 
   const recipients = Store.getStockNotificationSettings().recipients || [];
-  card.querySelectorAll('.stock-recipient-field').forEach((row, index) => {
-    const recipient = recipients[index] || {};
-    row.dataset.recipientId = recipient.id || `recipient_${index + 1}`;
-    const nameInput = row.querySelector('.stock-recipient-name');
-    const phoneInput = row.querySelector('.stock-recipient-phone');
-    if (nameInput && document.activeElement !== nameInput) nameInput.value = recipient.name || '';
-    if (phoneInput && document.activeElement !== phoneInput) phoneInput.value = recipient.phone || '';
-  });
+  const fields = document.getElementById('stock-recipients-fields');
+  if (!fields) return;
+  fields.replaceChildren(...recipients.map(createStockRecipientField));
 }
 
 function setupStockReceiptRecipientsForm() {
@@ -1020,11 +2201,29 @@ function setupStockReceiptRecipientsForm() {
   const card = document.getElementById('stock-receipt-settings-card');
   const status = document.getElementById('stock-recipients-status');
   const saveButton = document.getElementById('save-stock-recipients-btn');
-  if (!form || !card) return;
+  const addButton = document.getElementById('add-stock-recipient-btn');
+  const fields = document.getElementById('stock-recipients-fields');
+  if (!form || !card || !fields) return;
 
   populateStockReceiptRecipientsForm();
   if (form.dataset.bound) return;
   form.dataset.bound = 'true';
+
+  addButton?.addEventListener('click', () => {
+    const index = fields.querySelectorAll('.stock-recipient-field').length;
+    const row = createStockRecipientField({}, index);
+    fields.appendChild(row);
+    row.querySelector('.stock-recipient-name')?.focus();
+    if (status) status.textContent = '';
+  });
+
+  fields?.addEventListener('click', (event) => {
+    const removeButton = event.target.closest('.stock-recipient-remove');
+    if (!removeButton) return;
+    removeButton.closest('.stock-recipient-field')?.remove();
+    renumberStockRecipientFields(fields);
+    if (status) status.textContent = 'اضغط حفظ لتأكيد حذف المستلم.';
+  });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -1053,10 +2252,6 @@ function setupStockReceiptRecipientsForm() {
     const uniquePhones = new Set(recipients.map(recipient => recipient.phone));
     if (hasIncompleteRow) {
       if (status) status.textContent = 'أكمل الاسم والرقم في كل سطر مستخدم.';
-      return;
-    }
-    if (recipients.length < 3 || recipients.length > 4) {
-      if (status) status.textContent = 'يجب تحديد 3 مستلمين على الأقل و4 كحد أقصى.';
       return;
     }
     if (recipients.some(recipient => recipient.phone.length < 8 || recipient.phone.length > 15)) {
@@ -1224,12 +2419,13 @@ function renderInventoryTab() {
   tbody.innerHTML = filtered.map(p => {
     const stockStatus = p.stockStatus || 'in_stock';
     const seriesQty = typeof p.seriesQty === 'number' ? p.seriesQty : (stockStatus === 'out_of_stock' ? 0 : (stockStatus === 'low_stock' ? 3 : 15));
+    const isAvailable = p.isAvailable !== false;
     const nameAr = p.name?.ar || p.name || 'منتج بدون اسم';
 
     return `
       <tr data-id="${p.id}">
         <td>
-          <img src="${p.image}" alt="${nameAr}" loading="lazy" decoding="async" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;" onerror="this.src='/images/303-3.PNG';" />
+          <img src="${p.image}" alt="${nameAr}" loading="lazy" decoding="async" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;" onerror="this.src='https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg';" />
         </td>
         <td>
           <strong>${nameAr}</strong>
@@ -1243,11 +2439,17 @@ function renderInventoryTab() {
           </div>
         </td>
         <td>
-          <select class="form-control form-control-sm inv-status-select" data-id="${p.id}" style="width: 140px;">
-            <option value="in_stock" ${stockStatus === 'in_stock' ? 'selected' : ''}>متوفر (In Stock)</option>
-            <option value="low_stock" ${stockStatus === 'low_stock' ? 'selected' : ''}>كمية محدودة (Low)</option>
-            <option value="out_of_stock" ${stockStatus === 'out_of_stock' ? 'selected' : ''}>نفذ المخزون (Out)</option>
-          </select>
+          <div style="display:grid; gap:6px; min-width:170px;">
+            <select class="form-control form-control-sm inv-availability-select" data-id="${p.id}">
+              <option value="available" ${isAvailable ? 'selected' : ''}>ظاهر ومتاح للطلب</option>
+              <option value="unavailable" ${!isAvailable ? 'selected' : ''}>موقوف وغير متاح</option>
+            </select>
+            <select class="form-control form-control-sm inv-status-select" data-id="${p.id}">
+              <option value="in_stock" ${stockStatus === 'in_stock' ? 'selected' : ''}>رصيد جيد (In Stock)</option>
+              <option value="low_stock" ${stockStatus === 'low_stock' ? 'selected' : ''}>رصيد منخفض (Low)</option>
+              <option value="out_of_stock" ${stockStatus === 'out_of_stock' ? 'selected' : ''}>الرصيد صفر/سالب (Out)</option>
+            </select>
+          </div>
         </td>
         <td>
           <button class="btn btn-gold btn-sm quick-save-inv-btn" data-id="${p.id}">
@@ -1295,6 +2497,15 @@ function renderInventoryTab() {
       const newStatus = e.currentTarget.value;
       const newQty = newStatus === 'out_of_stock' ? 0 : (newStatus === 'low_stock' ? 3 : 15);
       Store.updateProduct(id, { stockStatus: newStatus, seriesQty: newQty });
+      renderInventoryTab();
+      window.dispatchEvent(new CustomEvent('joulane:refreshStore'));
+    });
+  });
+
+  tbody.querySelectorAll('.inv-availability-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const id = e.currentTarget.dataset.id;
+      Store.updateProduct(id, { isAvailable: e.currentTarget.value === 'available' });
       renderInventoryTab();
       window.dispatchEvent(new CustomEvent('joulane:refreshStore'));
     });

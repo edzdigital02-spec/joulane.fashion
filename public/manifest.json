@@ -8,25 +8,25 @@
   "categories": ["shopping", "fashion", "business"],
   "icons": [
     {
-      "src": "/images/icon-192.png",
+      "src": "https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955418/joulane/products/opsarwpedahajpkgostn.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "/images/icon-maskable-192.png",
+      "src": "https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955418/joulane/products/hc5wkqa1gaomvsmt5qek.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "maskable"
     },
     {
-      "src": "/images/icon-512.png",
+      "src": "https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955418/joulane/products/ngi3kklpj1yduujoqt4s.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any"
     },
     {
-      "src": "/images/icon-maskable-512.png",
+      "src": "https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955418/joulane/products/k4flmagfquaghtdm8eer.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "maskable"
@@ -34,7 +34,7 @@
   ],
   "screenshots": [
     {
-      "src": "/images/303-3.PNG",
+      "src": "https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg",
       "sizes": "800x1200",
       "type": "image/png",
       "form_factor": "narrow",

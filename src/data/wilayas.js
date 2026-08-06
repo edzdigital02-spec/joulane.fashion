@@ -1939,11 +1939,7 @@ const rawWilayas = [
 ];
 
 function shippingFor(code) {
-  if (code === 16) return { homePrice: 400, deskPrice: 250 };
-  if ([9, 31, 35, 42].includes(code)) return { homePrice: 550, deskPrice: 300 };
-  if (code >= 49 || [8, 11, 30, 32, 33, 37, 45, 47].includes(code)) return { homePrice: 950, deskPrice: 600 };
-  if ([1, 7, 17, 28, 39, 40, 41].includes(code)) return { homePrice: 750, deskPrice: 450 };
-  return { homePrice: 650, deskPrice: 400 };
+  return { homePrice: 0, deskPrice: 0 };
 }
 
 export const WILAYAS = rawWilayas.map(([nameAr, nameFr], index) => {

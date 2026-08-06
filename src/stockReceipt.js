@@ -119,7 +119,7 @@ function aggregateBatchMovements(movements) {
       grouped.set(key, {
         productId: movement.productId || '',
         productName: movement.productName || 'منتج',
-        productImg: movement.productImg || '/images/303-3.PNG',
+        productImg: movement.productImg || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg',
         oldQty: Number(movement.oldQty) || 0,
         newQty: Number(movement.newQty) || 0,
         delta,
@@ -145,7 +145,7 @@ async function drawBatchReceiptPage(context, batch, items, pageNumber, totalPage
   context.fillStyle = '#c9a53a';
   context.fillRect(0, 250, PAGE_WIDTH, 10);
 
-  const logo = await loadImage('/images/logo.png');
+  const logo = await loadImage('https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/skilwjfxosy60qtgwkxw.jpg');
   if (logo) {
     context.save();
     roundedPath(context, 1020, 48, 144, 144, 18);
@@ -537,7 +537,7 @@ function drawReceiptBackground(context) {
 }
 
 async function drawReceiptHeader(context, movement) {
-  const logo = await loadImage('/images/logo.png');
+  const logo = await loadImage('https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/skilwjfxosy60qtgwkxw.jpg');
   if (logo) {
     context.save();
     roundedPath(context, 76, 58, 164, 164, 18);
@@ -713,7 +713,7 @@ function loadImage(url) {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => resolve(null);
-    const source = String(url || '/images/303-3.PNG');
+    const source = String(url || 'https://res.cloudinary.com/q3ncbdqa/image/upload/f_auto,q_auto,c_limit,w_1200/v1785955417/joulane/products/azsvctjhsfzzhmr4xeev.jpg');
     if (/^https?:\/\//i.test(source)) image.crossOrigin = 'anonymous';
     image.src = source;
   });
